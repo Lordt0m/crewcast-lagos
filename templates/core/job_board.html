@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Job Board — CrewCast Lagos{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-6);">
+  <div>
+    <h1>Scheduled outdoor jobs</h1>
+    <p style="color: var(--color-text-secondary); max-width: 65ch;">
+      Comparing scheduled work windows against latest forecasts in Africa/Lagos.
+    </p>
+  </div>
+  {% if user.is_authenticated and not DEMO_MODE %}
+    <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
+  {% endif %}
+</div>
+
+<!-- 7-Day Planning Horizon Day Picker -->
+<nav class="day-picker" aria-label="Planning Horizon Days">
+  {% for day in horizon_days %}
+    <a href="?date={{ day.date_str }}" class="day-tab {% if day.date_str == selected_date_str %}active{% endif %}">
+      <span class="day-tab-weekday">{{ day.weekday }}</span>
+      <span class="day-tab-date">{{ day.day_num }} {{ day.month }}</span>
+      <span style="font-size: 0.75rem; color: var(--color-text-muted);">{{ day.job_count }} job{{ day.job_count|pluralize }}</span>
+    </a>
+  {% endfor %}
+</nav>
+
+<!-- Data Freshness Banner -->
+{% if board_freshness.state == 'pending' %}
+  <aside class="banner banner-fresh" role="status">
+    <div style="font-weight: 600;">Waiting for first forecast</div>
+    <div>Jobs will display planning recommendations once the scheduled worker retrieves initial data.</div>
+  </aside>
+{% elif board_freshness.state == 'stale' %}
+  <aside class="banner banner-stale" role="alert">
+    <div style="font-weight: 600;">Forecast is stale ({{ board_freshness.age_display }} old)</div>
+    <div>Review local conditions before using earlier recommendations. Suitable statuses are suppressed until fresh data arrives.</div>
+  </aside>
+{% elif board_freshness.state == 'expired' %}
+  <aside class="banner banner-expired" role="alert">
+    <div style="font-weight: 600;">Forecast is expired (>12h old)</div>
+    <div>Stored forecasts are too old to reliably guide planning. Awaiting scheduled sync recovery.</div>
+  </aside>
+{% else %}
+  <aside class="banner banner-fresh" role="status">
+    <span style="font-size: 0.875rem;">
+      Forecast retrieved {{ board_freshness.age_display }} ago · Open-Meteo
+    </span>
+  </aside>
+{% endif %}
+
+<!-- Job Groups -->
+{% if total_jobs_count == 0 %}
+  <div class="empty-state">
+    <h2 class="empty-state-title">No jobs planned for this day</h2>
+    <p class="empty-state-copy">
+      No outdoor jobs are scheduled for {{ selected_date_display }}. Add a job to compare its work window with the forecast.
+    </p>
+    {% if user.is_authenticated and not DEMO_MODE %}
+      <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
+    {% endif %}
+  </div>
+{% else %}
+
+  {# Group 1: No Current Recommendation (Pending / Expired) #}
+  {% if unactionable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <h2>No current recommendation</h2>
+        <span class="badge status-expired">{{ unactionable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in unactionable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 2: Unsuitable #}
+  {% if unsuitable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <h2>Unsuitable</h2>
+        <span class="badge status-unsuitable">{{ unsuitable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in unsuitable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 3: Caution #}
+  {% if caution_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <h2>Caution</h2>
+        <span class="badge status-caution">{{ caution_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in caution_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 4: Suitable #}
+  {% if suitable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <h2>Suitable</h2>
+        <span class="badge status-suitable">{{ suitable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in suitable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+{% endif %}
+{% endblock %}

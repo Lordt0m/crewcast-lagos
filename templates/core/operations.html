@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Operations & Telemetry — CrewCast Lagos{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: var(--space-8);">
+  <h1 style="font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: var(--space-2); color: var(--color-text-primary);">
+    Operations & Pipeline Telemetry
+  </h1>
+  <p style="color: var(--color-text-secondary); font-size: 1rem; max-width: 720px; line-height: 1.5;">
+    Real-time infrastructure health, background scheduler heartbeat, daily Open-Meteo API budget tracking, and per-site synchronization pipeline.
+  </p>
+</div>
+
+<!-- 1. Infrastructure Status Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-8);">
+  
+  <!-- Worker Heartbeat -->
+  <div class="card" style="padding: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+      <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+        Celery Worker
+      </span>
+      {% if worker_hb.status == 'ok' %}
+        <span class="badge status-suitable">Active</span>
+      {% elif worker_hb.status == 'stale' %}
+        <span class="badge status-caution">Stale</span>
+      {% else %}
+        <span class="badge status-unsuitable">Inactive</span>
+      {% endif %}
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      {{ worker_hb.last_seen|default:"Not recorded" }}
+    </div>
+    <div style="font-size: 0.8125rem; color: var(--color-text-secondary);">
+      Heartbeat: {{ worker_hb.age_display }} ago
+    </div>
+  </div>
+
+  <!-- Scheduler Heartbeat -->
+  <div class="card" style="padding: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+      <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+        Celery Beat
+      </span>
+      {% if scheduler_hb.status == 'ok' %}
+        <span class="badge status-suitable">Active</span>
+      {% elif scheduler_hb.status == 'stale' %}
+        <span class="badge status-caution">Stale</span>
+      {% else %}
+        <span class="badge status-unsuitable">Inactive</span>
+      {% endif %}
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      {{ scheduler_hb.last_seen|default:"Not recorded" }}
+    </div>
+    <div style="font-size: 0.8125rem; color: var(--color-text-secondary);">
+      Beat tick: {{ scheduler_hb.age_display }} ago
+    </div>
+  </div>
+
+  <!-- Cache / Redis -->
+  <div class="card" style="padding: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+      <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+        Redis Cache
+      </span>
+      {% if cache_health.status == 'ok' %}
+        <span class="badge status-suitable">Connected</span>
+      {% else %}
+        <span class="badge status-caution">Degraded</span>
+      {% endif %}
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      {% if cache_health.latency_ms %}{{ cache_health.latency_ms }} ms{% else %}Degraded{% endif %}
+    </div>
+    <div style="font-size: 0.8125rem; color: var(--color-text-secondary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+      {{ cache_health.detail }}
+    </div>
+  </div>
+
+  <!-- Provider Circuit Breaker -->
+  <div class="card" style="padding: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+      <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+        Provider Circuit
+      </span>
+      {% if circuit.state == 'CLOSED' %}
+        <span class="badge status-suitable">Closed (Healthy)</span>
+      {% elif circuit.state == 'HALF_OPEN' %}
+        <span class="badge status-caution">Half-Open (Testing)</span>
+      {% else %}
+        <span class="badge status-unsuitable">Open (Tripped)</span>
+      {% endif %}
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      {{ circuit.state }}
+    </div>
+    <div style="font-size: 0.8125rem; color: var(--color-text-secondary);">
+      {% if circuit.state == 'OPEN' %}
+        Cool-off remaining: {{ circuit.cooloff_remaining_seconds }}s
+      {% else %}
+        Failures: {{ circuit.consecutive_failures }} / 3 threshold
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- 2. Daily Budget Section -->
+<section style="margin-bottom: var(--space-8);">
+  <div class="card" style="padding: var(--space-6);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-4);">
+      <div>
+        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+          Daily Provider Budget (Africa/Lagos Calendar)
+        </h2>
+        <p style="color: var(--color-text-secondary); font-size: 0.875rem;">
+          {{ budget.date_display }} · Strict atomic quota of 300 provider requests/day.
+        </p>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-mono); color: var(--color-text-primary);">
+          {{ budget.reserved }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ {{ budget.cap }}</span>
+        </span>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">{{ budget.percentage_used }}% reserved</div>
+      </div>
+    </div>
+
+    <!-- Progress Meter -->
+    <div style="background-color: var(--color-bg-secondary); border-radius: 9999px; height: 10px; overflow: hidden; margin-bottom: var(--space-5);">
+      <div style="background-color: {% if budget.percentage_used > 85 %}var(--color-status-unsuitable){% elif budget.percentage_used > 60 %}var(--color-status-caution){% else %}var(--color-status-suitable){% endif %}; height: 100%; width: {{ budget.percentage_used }}%; transition: width 0.3s ease;"></div>
+    </div>
+
+    <!-- Budget Breakdown Metrics -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-4); border-top: 1px solid var(--color-border); padding-top: var(--space-4);">
+      <div>
+        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--color-text-muted); font-weight: 600;">Consumed</span>
+        <div style="font-size: 1.25rem; font-weight: 700; font-family: var(--font-mono); color: var(--color-text-primary);">
+          {{ budget.consumed }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+          {{ budget.successful }} ok · {{ budget.failed }} err
+        </div>
+      </div>
+
+      <div>
+        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--color-text-muted); font-weight: 600;">Reserved Slots</span>
+        <div style="font-size: 1.25rem; font-weight: 700; font-family: var(--font-mono); color: var(--color-text-primary);">
+          {{ budget.reserved }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">Atomic lock claims</div>
+      </div>
+
+      <div>
+        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--color-text-muted); font-weight: 600;">Deferred Calls</span>
+        <div style="font-size: 1.25rem; font-weight: 700; font-family: var(--font-mono); color: {% if budget.deferred > 0 %}var(--color-status-caution){% else %}var(--color-text-primary){% endif %};">
+          {{ budget.deferred }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">Rate-limit protected</div>
+      </div>
+
+      <div>
+        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--color-text-muted); font-weight: 600;">Remaining Slots</span>
+        <div style="font-size: 1.25rem; font-weight: 700; font-family: var(--font-mono); color: var(--color-status-suitable);">
+          {{ budget.remaining }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted);">Available today</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Per-Site Sync Timeline -->
+<section style="margin-bottom: var(--space-8);">
+  <div class="card" style="padding: var(--space-6);">
+    <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      Per-Site Synchronization Timeline
+    </h2>
+    <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: var(--space-5);">
+      Scheduled 3-hour retrieval cycle across all active sites in Lagos State.
+    </p>
+
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+        <caption class="sr-only">Per-site synchronization status and upcoming schedule</caption>
+        <thead>
+          <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Site Name</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Coordinates</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Last Sync</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Freshness</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Next Due</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Last Outcome</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Retry / Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in sites_data %}
+            <tr style="border-bottom: 1px solid var(--color-border);">
+              <td style="padding: var(--space-3) var(--space-2); font-weight: 600; color: var(--color-text-primary);">
+                {{ row.site.name }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono); font-size: 0.8125rem; color: var(--color-text-muted);">
+                {{ row.site.latitude }}, {{ row.site.longitude }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2);">
+                <div>{{ row.last_sync_wat }}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">{{ row.last_sync_age }} ago</div>
+              </td>
+              <td style="padding: var(--space-3) var(--space-2);">
+                {% if row.freshness_state == 'fresh' %}
+                  <span class="badge status-suitable">Fresh (&le;4h)</span>
+                {% elif row.freshness_state == 'stale' %}
+                  <span class="badge status-stale">Stale (4–12h)</span>
+                {% elif row.freshness_state == 'expired' %}
+                  <span class="badge status-expired">Expired (&gt;12h)</span>
+                {% else %}
+                  <span class="badge status-expired">Pending</span>
+                {% endif %}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2);">
+                <div>{{ row.next_due_wat }}</div>
+                {% if row.is_overdue %}
+                  <span style="font-size: 0.75rem; color: var(--color-status-caution); font-weight: 600;">Due now</span>
+                {% endif %}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2);">
+                {% if row.last_outcome == 'success' %}
+                  <span class="badge status-suitable">Success</span>
+                {% elif row.last_outcome == 'transient_failure' %}
+                  <span class="badge status-caution">Transient Fail</span>
+                {% elif row.last_outcome == 'permanent_failure' %}
+                  <span class="badge status-unsuitable">Permanent Fail</span>
+                {% elif row.last_outcome == 'deferred' %}
+                  <span class="badge status-stale">Deferred</span>
+                {% else %}
+                  <span style="color: var(--color-text-muted);">No attempts</span>
+                {% endif %}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-size: 0.8125rem;">
+                {% if row.next_retry_wat %}
+                  <div style="color: var(--color-status-caution); font-weight: 500;">
+                    Retry at {{ row.next_retry_wat }}
+                  </div>
+                {% endif %}
+                {% if row.last_error %}
+                  <div style="color: var(--color-text-muted); font-size: 0.75rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.last_error }}">
+                    {{ row.last_error }}
+                  </div>
+                {% elif not row.next_retry_wat %}
+                  <span style="color: var(--color-text-muted);">None</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" style="padding: var(--space-4); text-align: center; color: var(--color-text-muted);">
+                No active sites configured.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Recent Synchronization Attempts Audit Log -->
+<section style="margin-bottom: var(--space-8);">
+  <div class="card" style="padding: var(--space-6);">
+    <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      Recent Outbound Sync Attempts Log
+    </h2>
+    <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: var(--space-5);">
+      Immutable history of recent outbound requests, HTTP statuses, and content snapshot links.
+    </p>
+
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+        <caption class="sr-only">Recent sync attempts audit trail</caption>
+        <thead>
+          <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Time (WAT)</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Site</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Attempt</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Outcome</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">HTTP Code</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Duration</th>
+            <th scope="col" style="padding: var(--space-3) var(--space-2);">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for att in recent_attempts %}
+            <tr style="border-bottom: 1px solid var(--color-border);">
+              <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono); font-size: 0.8125rem;">
+                {{ att.started_wat }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-weight: 500;">
+                {{ att.site_name }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">
+                #{{ att.attempt_number }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2);">
+                {% if att.outcome == 'success' %}
+                  <span class="badge status-suitable">Success</span>
+                {% elif att.outcome == 'transient_failure' %}
+                  <span class="badge status-caution">Transient Fail</span>
+                {% elif att.outcome == 'permanent_failure' %}
+                  <span class="badge status-unsuitable">Permanent Fail</span>
+                {% elif att.outcome == 'deferred' %}
+                  <span class="badge status-stale">Deferred</span>
+                {% endif %}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">
+                {{ att.http_status|default:"—" }}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">
+                {% if att.duration_ms %}{{ att.duration_ms }} ms{% else %}—{% endif %}
+              </td>
+              <td style="padding: var(--space-3) var(--space-2); font-size: 0.8125rem;">
+                {% if att.snapshot_hash %}
+                  <span style="font-family: var(--font-mono); color: var(--color-text-secondary);">Hash: {{ att.snapshot_hash }}</span>
+                {% elif att.error_message %}
+                  <span style="color: var(--color-status-unsuitable); max-width: 250px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ att.error_message }}">{{ att.error_message }}</span>
+                {% else %}
+                  <span style="color: var(--color-text-muted);">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" style="padding: var(--space-4); text-align: center; color: var(--color-text-muted);">
+                No synchronization attempts recorded yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Weather Policy — CrewCast Lagos{% endblock %}
+
+{% block content %}
+<div class="form-card" style="max-width: 700px;">
+  <h1>Weather planning policy</h1>
+  <p style="color: var(--color-text-secondary); margin-bottom: var(--space-6);">
+    Adjust caution and stop thresholds. Every update creates a new immutable version without rewriting historical records. Caution must be strictly lower than stop for every metric.
+  </p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="banner banner-stale" role="alert">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+      <div class="form-group">
+        <label for="{{ form.rain_prob_caution.id_for_label }}" class="form-label">Rain prob caution (%)</label>
+        {{ form.rain_prob_caution }}
+        {% if form.rain_prob_caution.errors %}<span class="form-error">{{ form.rain_prob_caution.errors.0 }}</span>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.rain_prob_stop.id_for_label }}" class="form-label">Rain prob stop (%)</label>
+        {{ form.rain_prob_stop }}
+        {% if form.rain_prob_stop.errors %}<span class="form-error">{{ form.rain_prob_stop.errors.0 }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+      <div class="form-group">
+        <label for="{{ form.precip_caution_mm.id_for_label }}" class="form-label">Precipitation caution (mm/h)</label>
+        {{ form.precip_caution_mm }}
+        {% if form.precip_caution_mm.errors %}<span class="form-error">{{ form.precip_caution_mm.errors.0 }}</span>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.precip_stop_mm.id_for_label }}" class="form-label">Precipitation stop (mm/h)</label>
+        {{ form.precip_stop_mm }}
+        {% if form.precip_stop_mm.errors %}<span class="form-error">{{ form.precip_stop_mm.errors.0 }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+      <div class="form-group">
+        <label for="{{ form.gust_caution_kmh.id_for_label }}" class="form-label">Wind gusts caution (km/h)</label>
+        {{ form.gust_caution_kmh }}
+        {% if form.gust_caution_kmh.errors %}<span class="form-error">{{ form.gust_caution_kmh.errors.0 }}</span>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.gust_stop_kmh.id_for_label }}" class="form-label">Wind gusts stop (km/h)</label>
+        {{ form.gust_stop_kmh }}
+        {% if form.gust_stop_kmh.errors %}<span class="form-error">{{ form.gust_stop_kmh.errors.0 }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+      <div class="form-group">
+        <label for="{{ form.apparent_temp_caution_c.id_for_label }}" class="form-label">Apparent temp caution (°C)</label>
+        {{ form.apparent_temp_caution_c }}
+        {% if form.apparent_temp_caution_c.errors %}<span class="form-error">{{ form.apparent_temp_caution_c.errors.0 }}</span>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.apparent_temp_stop_c.id_for_label }}" class="form-label">Apparent temp stop (°C)</label>
+        {{ form.apparent_temp_stop_c }}
+        {% if form.apparent_temp_stop_c.errors %}<span class="form-error">{{ form.apparent_temp_stop_c.errors.0 }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-6);">
+      <a href="{% url 'job_board' %}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary">Create new policy version</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

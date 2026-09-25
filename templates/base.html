@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}CrewCast Lagos — Weather-Aware Job Planning{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/crewcast.css' %}">
+</head>
+<body>
+
+  <header class="app-header">
+    <div style="display: flex; align-items: center; gap: var(--space-3);">
+      <a href="{% url 'job_board' %}" class="brand-title">
+        CrewCast Lagos
+      </a>
+      <span class="brand-badge">Planning Desk</span>
+    </div>
+
+    <nav aria-label="Main Navigation">
+      <ul class="nav-links">
+        <li><a href="{% url 'job_board' %}" class="nav-link">Job board</a></li>
+        <li><a href="{% url 'operations' %}" class="nav-link">Operations</a></li>
+        <li><a href="{% url 'demo_replay' %}" class="nav-link">Failure replay</a></li>
+        {% if user.is_authenticated %}
+          <li><a href="{% url 'job_create' %}" class="btn btn-primary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Add job</a></li>
+          <li>
+            <form action="{% url 'logout' %}" method="post" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-secondary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Sign out</button>
+            </form>
+          </li>
+        {% else %}
+          <li><a href="{% url 'login' %}" class="btn btn-secondary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Manager sign-in</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </header>
+
+  {% if DEMO_MODE %}
+    <div style="background-color: #fefce8; border-bottom: 1px solid #fef08a; padding: 10px 24px; font-size: 0.875rem; color: #713f12; text-align: center;">
+      <strong>Demo Mode:</strong> All state-changing actions are disabled server-side. Scheduled background syncing continues normally within the daily request budget.
+    </div>
+  {% endif %}
+
+  {% if messages %}
+    <div class="container" style="padding-bottom: 0;">
+      {% for message in messages %}
+        <div class="banner {% if message.tags == 'error' %}banner-stale{% else %}banner-fresh{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <p>
+        <strong>Planning signal only:</strong> Check current conditions and site requirements before work. CrewCast evaluations reflect illustrative job preferences, not occupational safety clearances.
+      </p>
+      <p>
+        Live weather forecasts provided by <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">Open-Meteo</a> under non-commercial terms. Derived planning recommendations calculated by CrewCast against versioned job policies.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

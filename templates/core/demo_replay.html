@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Failure Replay Sandbox — CrewCast Lagos{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: var(--space-6);">
+  <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
+    <span class="badge" style="background-color: #fef08a; color: #713f12; border: 1px solid #facc15; font-weight: 700;">
+      Simulation Only
+    </span>
+    <span style="font-size: 0.8125rem; color: var(--color-text-muted);">
+      Zero Database Side-Effects · No Outbound Calls
+    </span>
+  </div>
+
+  <h1 style="font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: var(--space-2); color: var(--color-text-primary);">
+    Failure Replay & Scenario Sandbox
+  </h1>
+  <p style="color: var(--color-text-secondary); font-size: 1rem; max-width: 760px; line-height: 1.5;">
+    Interactive demonstration of core evaluation and operational resilience invariants: threshold crossings, stale data suitable suppression, upstream timeouts, and provider circuit breaker trips.
+  </p>
+</div>
+
+<!-- Simulation Notice Banner -->
+<div class="card" style="background-color: #fffbeb; border-color: #fde68a; padding: var(--space-4) var(--space-5); margin-bottom: var(--space-6); display: flex; align-items: flex-start; gap: var(--space-3);">
+  <svg style="width: 20px; height: 20px; color: #d97706; flex-shrink: 0; margin-top: 2px;" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+  </svg>
+  <div style="font-size: 0.875rem; color: #92400e;">
+    <strong>Auditable Resilience Evidence:</strong> Every scenario below is evaluated in-memory using deterministic fixtures. It will not modify your shared jobs, snapshots, or daily API quotas.
+  </div>
+</div>
+
+<!-- Scenario Selector Tabs -->
+<nav aria-label="Simulation Scenarios" style="margin-bottom: var(--space-8);">
+  <div style="display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-2);">
+    {% for s in scenarios_list %}
+      <a href="?scenario={{ s.key }}"
+         style="display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-size: 0.875rem; text-decoration: none; white-space: nowrap; border: 1px solid {% if s.key == scenario_key %}var(--color-primary){% else %}var(--color-border){% endif %}; background-color: {% if s.key == scenario_key %}var(--color-primary){% else %}var(--color-bg-primary){% endif %}; color: {% if s.key == scenario_key %}white{% else %}var(--color-text-secondary){% endif %}; font-weight: {% if s.key == scenario_key %}600{% else %}500{% endif %}; transition: all 0.15s ease;">
+        <span>{{ s.name }}</span>
+        <span style="font-size: 0.75rem; opacity: 0.85; background: rgba(0,0,0,0.12); padding: 2px 6px; border-radius: 4px;">
+          {{ s.badge }}
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+</nav>
+
+<!-- Active Scenario Card -->
+<div class="card" style="padding: var(--space-6); margin-bottom: var(--space-8);">
+  <div style="border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-4); margin-bottom: var(--space-6);">
+    <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+      Active Scenario
+    </span>
+    <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--color-text-primary); margin-top: var(--space-1); margin-bottom: var(--space-2);">
+      {{ sim_title }}
+    </h2>
+    <p style="font-size: 0.9375rem; color: var(--color-text-secondary); max-width: 800px; line-height: 1.5;">
+      {{ sim_desc }}
+    </p>
+  </div>
+
+  <!-- Simulated Evaluator Output -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-6); margin-bottom: var(--space-6);">
+    
+    <!-- Left: Evaluated Job Card Preview -->
+    <div>
+      <h3 style="font-size: 0.875rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-3);">
+        Simulated Job Planning Card
+      </h3>
+      
+      <div class="card" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: var(--space-5);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+          <div>
+            <h4 style="font-size: 1.0625rem; font-weight: 600; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+              {{ sim_job_title }}
+            </h4>
+            <div style="font-size: 0.8125rem; color: var(--color-text-secondary);">
+              {{ sim_site }}
+            </div>
+          </div>
+          <span class="badge {{ effective_display.badge_class }}">
+            {{ effective_display.display_status }}
+          </span>
+        </div>
+
+        <div style="font-size: 0.875rem; color: var(--color-text-primary); margin-bottom: var(--space-3);">
+          <strong>Window:</strong> {{ sim_window }}
+        </div>
+
+        {% if effective_display.banner_message %}
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-size: 0.8125rem; color: #92400e; margin-bottom: var(--space-3);">
+            {{ effective_display.banner_message }}
+          </div>
+        {% endif %}
+
+        {% if reasons %}
+          <div style="font-size: 0.8125rem; color: var(--color-text-secondary); margin-bottom: var(--space-3);">
+            <strong>Trigger:</strong> {{ reasons.0.message }}
+          </div>
+        {% endif %}
+
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-3);">
+          {{ sim_age_text }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Policy Threshold Context & Invariant Details -->
+    <div>
+      <h3 style="font-size: 0.875rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-3);">
+        Applied Rule & Invariants
+      </h3>
+
+      <div style="background-color: var(--color-bg-secondary); border-radius: var(--radius-md); padding: var(--space-4); font-size: 0.875rem; color: var(--color-text-primary);">
+        {% if scenario_key == 'normal' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Pure Evaluation:</strong> All intersecting hourly forecast instants remain below caution thresholds.
+          </p>
+          <ul style="padding-left: 20px; line-height: 1.6; font-size: 0.8125rem; color: var(--color-text-secondary);">
+            <li>Rain probability &le; 20% (Caution: 40%)</li>
+            <li>Precipitation &le; 0.2 mm/h (Caution: 2.0 mm/h)</li>
+            <li>Wind gusts &le; 18.0 km/h (Caution: 25.0 km/h)</li>
+          </ul>
+
+        {% elif scenario_key == 'caution' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Caution Threshold Crossing:</strong> Evaluator records each crossed metric without elevating to stop status.
+          </p>
+          <div style="background: white; border-radius: var(--radius-sm); padding: var(--space-3); margin-top: var(--space-2); border: 1px solid var(--color-border);">
+            {% for r in reasons %}
+              <div style="margin-bottom: var(--space-1); font-size: 0.8125rem;">
+                <span class="badge status-caution">Caution</span>
+                {{ r.message }}
+              </div>
+            {% endfor %}
+          </div>
+
+        {% elif scenario_key == 'unsuitable' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Stop Threshold Crossing:</strong> Exceeding stop criteria on rain rate, probability, or wind gusts forces an Unsuitable status.
+          </p>
+          <div style="background: white; border-radius: var(--radius-sm); padding: var(--space-3); margin-top: var(--space-2); border: 1px solid var(--color-border);">
+            {% for r in reasons %}
+              <div style="margin-bottom: var(--space-1); font-size: 0.8125rem;">
+                <span class="badge status-unsuitable">Stop</span>
+                {{ r.message }}
+              </div>
+            {% endfor %}
+          </div>
+
+        {% elif scenario_key == 'timeout_retry' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Transient Network Failure:</strong> Upstream provider fails with HTTP 504 Gateway Timeout.
+          </p>
+          <ul style="padding-left: 20px; line-height: 1.6; font-size: 0.8125rem; color: var(--color-text-secondary);">
+            <li>Attempt 1 classified as transient error (attempt count = 1).</li>
+            <li>Exponential backoff calculates {{ extra_details.calculated_delay_seconds }}s delay with jitter.</li>
+            <li>Next retry scheduled for <strong>{{ extra_details.next_retry_wat }}</strong>.</li>
+            <li>Existing snapshot remains available for local dispatchers.</li>
+          </ul>
+
+        {% elif scenario_key == 'stale' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Freshness Invariant:</strong> Forecast age is 7.5 hours (stale tier: 4 to 12 hours).
+          </p>
+          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: var(--space-3); font-size: 0.8125rem; color: #92400e;">
+            <strong>Suitable Suppression:</strong> Even though the raw weather values are favorable, CrewCast suppresses the 'Suitable' signal into 'Historical context (Stale)' to prevent unsafe assumptions on aging models.
+          </div>
+
+        {% elif scenario_key == 'expired' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Expiry Invariant:</strong> Forecast age is 14 hours (&gt;12h expired threshold).
+          </p>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: var(--space-3); font-size: 0.8125rem; color: #991b1b;">
+            <strong>Zero Planning Signal:</strong> Stored forecast is classified as expired. Recommendation status is suppressed completely to 'No current recommendation' until a successful synchronization occurs.
+          </div>
+
+        {% elif scenario_key == 'circuit_recovery' %}
+          <p style="margin-bottom: var(--space-2);">
+            <strong>Circuit Breaker State Machine:</strong> Protects upstream Open-Meteo API when failures cascade.
+          </p>
+          <ol style="padding-left: 20px; line-height: 1.6; font-size: 0.8125rem; color: var(--color-text-secondary);">
+            <li><strong>CLOSED:</strong> 0 failures; normal polling within 300 call daily budget.</li>
+            <li><strong>OPEN:</strong> 3 consecutive transient failures trip breaker; outbound calls deferred for 15m.</li>
+            <li><strong>HALF_OPEN:</strong> Cooloff expires; worker sends 1 probe request.</li>
+            <li><strong>RECOVERY:</strong> Probe succeeds; breaker resets to CLOSED and zero failures.</li>
+          </ol>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Hourly Breakdown Table (for weather evaluation scenarios) -->
+  {% if hourly_evaluations %}
+    <div style="border-top: 1px solid var(--color-border); padding-top: var(--space-5);">
+      <h3 style="font-size: 1rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-3);">
+        Intersecting Hourly Interval Forecast Values
+      </h3>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+          <caption class="sr-only">Intersecting hourly intervals and evaluated meteorological metrics</caption>
+          <thead>
+            <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.75rem; text-transform: uppercase;">
+              <th scope="col" style="padding: var(--space-2);">Hour (WAT)</th>
+              <th scope="col" style="padding: var(--space-2);">Rain Probability</th>
+              <th scope="col" style="padding: var(--space-2);">Precipitation</th>
+              <th scope="col" style="padding: var(--space-2);">Wind Gusts</th>
+              <th scope="col" style="padding: var(--space-2);">Apparent Temp</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in hourly_evaluations %}
+              <tr style="border-bottom: 1px solid var(--color-border);">
+                <td style="padding: var(--space-3) var(--space-2); font-weight: 500;">{{ h.hour_label }}</td>
+                <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">{{ h.prob }}%</td>
+                <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">{{ h.precip }} mm/h</td>
+                <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">{{ h.gusts }} km/h</td>
+                <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">{{ h.temp }} °C</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Circuit Transitions Table (for circuit breaker scenario) -->
+  {% if extra_details.is_circuit_simulation %}
+    <div style="border-top: 1px solid var(--color-border); padding-top: var(--space-5);">
+      <h3 style="font-size: 1rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-3);">
+        Circuit Breaker Transition Lifecycle
+      </h3>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+          <caption class="sr-only">Circuit breaker lifecycle stages and transitions</caption>
+          <thead>
+            <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.75rem; text-transform: uppercase;">
+              <th scope="col" style="padding: var(--space-2);">Stage</th>
+              <th scope="col" style="padding: var(--space-2);">Circuit State</th>
+              <th scope="col" style="padding: var(--space-2);">Failures</th>
+              <th scope="col" style="padding: var(--space-2);">Behavioral Effect</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in extra_details.transitions %}
+              <tr style="border-bottom: 1px solid var(--color-border);">
+                <td style="padding: var(--space-3) var(--space-2); font-weight: 600;">{{ t.stage }}</td>
+                <td style="padding: var(--space-3) var(--space-2);">
+                  {% if t.state == 'CLOSED' %}
+                    <span class="badge status-suitable">CLOSED</span>
+                  {% elif t.state == 'HALF_OPEN' %}
+                    <span class="badge status-caution">HALF_OPEN</span>
+                  {% else %}
+                    <span class="badge status-unsuitable">OPEN</span>
+                  {% endif %}
+                </td>
+                <td style="padding: var(--space-3) var(--space-2); font-family: var(--font-mono);">{{ t.failures }}</td>
+                <td style="padding: var(--space-3) var(--space-2); color: var(--color-text-secondary);">{{ t.desc }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

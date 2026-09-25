@@ -1,0 +1,101 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: crewcast_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crewcast_db
+      POSTGRES_USER: crewcast_user
+      POSTGRES_PASSWORD: crewcast_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crewcast_user -d crewcast_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: crewcast_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: crewcast_web
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://crewcast_user:crewcast_pass@db:5432/crewcast_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DEBUG=True
+      - SECRET_KEY=docker-compose-development-key-lagos
+      - DEMO_MODE=False
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: crewcast_worker
+    restart: unless-stopped
+    command: celery -A crewcast worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://crewcast_user:crewcast_pass@db:5432/crewcast_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DEBUG=True
+      - SECRET_KEY=docker-compose-development-key-lagos
+      - DEMO_MODE=False
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build: .
+    container_name: crewcast_beat
+    restart: unless-stopped
+    command: celery -A crewcast beat -l info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://crewcast_user:crewcast_pass@db:5432/crewcast_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DEBUG=True
+      - SECRET_KEY=docker-compose-development-key-lagos
+      - DEMO_MODE=False
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -66,3 +66,26 @@ def test_production_settings_accept_explicit_configuration():
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_postgres_url_keeps_tls_options_and_decodes_credentials():
+    env = os.environ.copy()
+    env.update({
+        'DEBUG': 'False',
+        'SECRET_KEY': 'unique-test-secret-key-not-for-deployment',
+        'ALLOWED_HOSTS': 'crewcast.example.com',
+        'DATABASE_URL': 'postgresql://crewcast:p%40ssword@db.example.com/crewcast?sslmode=require&channel_binding=require',
+        'DJANGO_SETTINGS_MODULE': 'crewcast.settings',
+    })
+    result = subprocess.run(
+        [sys.executable, '-c', "import django; django.setup(); from django.conf import settings; print(settings.DATABASES['default']['PASSWORD']); print(settings.DATABASES['default']['OPTIONS'])"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'p@ssword' in result.stdout
+    assert "'sslmode': 'require'" in result.stdout
+    assert "'channel_binding': 'require'" in result.stdout

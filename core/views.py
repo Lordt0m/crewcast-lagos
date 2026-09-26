@@ -19,6 +19,7 @@ from .models import (
     BudgetWindow,
     SyncAttempt,
     ProviderCircuitState,
+    ScheduledForecastRun,
     LAGOS_TZ,
 )
 from .forms import JobForm, SiteForm, WeatherPolicyForm
@@ -56,6 +57,29 @@ def format_duration_ago(seconds: float) -> str:
         return f"{minutes}m"
     else:
         return "<1m"
+
+
+def scheduled_forecast_status(now=None):
+    """Report the latest scheduled invocation from durable database state."""
+    now = now or timezone.now()
+    run = ScheduledForecastRun.objects.first()
+    if run is None:
+        return {'status': 'inactive', 'last_seen': None, 'age_display': 'Never seen', 'attempt_count': 0}
+    age_seconds = max(0.0, (now - run.started_at).total_seconds())
+    if run.status == ScheduledForecastRun.Status.FAILED:
+        status = 'failed'
+    elif run.status == ScheduledForecastRun.Status.RUNNING:
+        status = 'running' if age_seconds <= 600 else 'stale'
+    else:
+        status = 'ok' if age_seconds <= 7200 else 'stale'
+    return {
+        'status': status,
+        'last_seen': run.started_at.astimezone(LAGOS_TZ).strftime('%d %b %H:%M WAT'),
+        'started_at': run.started_at.isoformat(),
+        'age_seconds': round(age_seconds, 1),
+        'age_display': format_duration_ago(age_seconds),
+        'attempt_count': run.attempt_count,
+    }
 
 
 def job_board_view(request):
@@ -427,9 +451,12 @@ def health_check_view(request):
         'web': {'status': 'ok'},
         'database': {'status': 'unknown'},
         'cache': {'status': 'unknown'},
-        'worker_heartbeat': {'status': 'unknown'},
-        'scheduler_heartbeat': {'status': 'unknown'},
     }
+    if settings.FORECAST_RUNNER == 'github_actions':
+        components['scheduled_forecast'] = {'status': 'unknown'}
+    else:
+        components['worker_heartbeat'] = {'status': 'unknown'}
+        components['scheduler_heartbeat'] = {'status': 'unknown'}
     
     # 1. Database check
     try:
@@ -460,6 +487,16 @@ def health_check_view(request):
     except Exception as exc:
         components['cache']['status'] = 'degraded'
         components['cache']['error'] = str(exc)
+
+    if settings.FORECAST_RUNNER == 'github_actions':
+        if components['database']['status'] == 'ok':
+            components['scheduled_forecast'] = scheduled_forecast_status()
+        is_healthy = components['web']['status'] == 'ok' and components['database']['status'] == 'ok'
+        return JsonResponse({
+            'status': 'ok' if is_healthy else 'unhealthy',
+            'timestamp': timezone.now().isoformat(),
+            'components': components,
+        }, status=200 if is_healthy else 503)
 
     # 3. Worker heartbeat check
     if cache_accessible:
@@ -539,6 +576,8 @@ def operations_view(request):
     Gracefully degrades if cache or broker is unreachable.
     """
     now = timezone.now()
+    forecast_runner = settings.FORECAST_RUNNER
+    scheduled_run = scheduled_forecast_status(now) if forecast_runner == 'github_actions' else None
     now_lagos = now.astimezone(LAGOS_TZ)
     today_lagos = now_lagos.date()
 
@@ -683,6 +722,8 @@ def operations_view(request):
         'cache_health': cache_health,
         'worker_hb': worker_hb,
         'scheduler_hb': scheduler_hb,
+        'forecast_runner': forecast_runner,
+        'scheduled_run': scheduled_run,
         'budget': budget_info,
         'circuit': circuit_info,
         'sites_data': sites_data,

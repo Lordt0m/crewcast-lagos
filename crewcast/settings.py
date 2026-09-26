@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -85,14 +85,21 @@ if DATABASE_URL and not DATABASE_URL.startswith(('postgresql://', 'postgres://')
 
 if DATABASE_URL and DATABASE_URL.startswith(('postgresql://', 'postgres://')):
     parsed = urlparse(DATABASE_URL)
+    query = parse_qs(parsed.query)
+    connection_options = {
+        key: query[key][0]
+        for key in ('sslmode', 'channel_binding', 'connect_timeout')
+        if key in query
+    }
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed.path.lstrip('/'),
-            'USER': parsed.username,
-            'PASSWORD': parsed.password,
+            'NAME': unquote(parsed.path.lstrip('/')),
+            'USER': unquote(parsed.username or ''),
+            'PASSWORD': unquote(parsed.password or ''),
             'HOST': parsed.hostname,
             'PORT': parsed.port or 5432,
+            'OPTIONS': connection_options,
         }
     }
 else:
@@ -121,6 +128,7 @@ CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
 CELERY_TIMEZONE = 'Africa/Lagos'
 CELERY_ENABLE_UTC = True
+FORECAST_RUNNER = os.getenv('FORECAST_RUNNER', 'celery')
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

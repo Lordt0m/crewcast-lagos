@@ -478,3 +478,21 @@ class ProviderCircuitState(models.Model):
                 circuit.state = 'OPEN'
                 circuit.opened_at = now
             circuit.save(update_fields=['state', 'consecutive_transient_failures', 'opened_at'])
+
+
+class ScheduledForecastRun(models.Model):
+    """Database-backed status for a short-lived scheduler without shared Redis."""
+
+    class Status(models.TextChoices):
+        RUNNING = 'running', 'Running'
+        COMPLETED = 'completed', 'Completed'
+        FAILED = 'failed', 'Failed'
+
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.RUNNING)
+    attempt_count = models.PositiveIntegerField(default=0)
+    error_type = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-pk']

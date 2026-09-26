@@ -1,0 +1,41 @@
+name: Forecast refresh
+
+on:
+  schedule:
+    # Keep off the top of the hour, when GitHub schedules are most congested.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crewcast-forecast-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Enable only after a hosted PostgreSQL database and repository secrets exist.
+    if: ${{ vars.CREWCAST_FORECAST_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEBUG: "False"
+      DEMO_MODE: "True"
+      ALLOWED_HOSTS: "localhost"
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: ${{ secrets.CREWCAST_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check required configuration
+        run: |
+          test -n "$DATABASE_URL"
+          test -n "$SECRET_KEY"
+      - name: Refresh due forecasts
+        run: python manage.py sync_due_forecasts

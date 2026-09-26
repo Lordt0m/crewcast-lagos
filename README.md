@@ -12,10 +12,10 @@ CrewCast answers the central operational question for outdoor service operations
 ## Key Invariants & Architectural Principles
 
 1. **Zero Provider Requests on Page Loads**  
-   Every web page view (`/`, `/jobs/<id>/`, `/operations/`, `/demo/replay/`) queries only local PostgreSQL records and Redis cache. Live forecast synchronization runs strictly in the background via Celery Beat and Celery Workers.
+   Every web page view (`/`, `/jobs/<id>/`, `/operations/`, `/demo/replay/`) queries only stored PostgreSQL records and optional Redis cache. Live forecast synchronization runs outside web requests, via Celery locally or the scheduled GitHub Actions job for a hosted demo.
 
 2. **Atomic Lagos Calendar Daily Budget Cap (300 calls/day)**  
-   Open-Meteo free non-commercial API usage is guarded by an atomic row-locked daily budget tracker (`BudgetWindow`). Even with multiple parallel Celery workers, outbound requests are capped at 300 per `Africa/Lagos` calendar day. Once exhausted, background sync attempts are recorded as `deferred` without failing local views.
+   Open-Meteo free non-commercial API usage is guarded by an atomic row-locked daily budget tracker (`BudgetWindow`). Even with overlapping sync processes, outbound requests are capped at 300 per `Africa/Lagos` calendar day. Once exhausted, background sync attempts are recorded as `deferred` without failing local views.
 
 3. **Immutable Content Hash Snapshots & Provenance**  
    Forecast data is normalized and deduplicated by SHA-256 content hash in `ForecastSnapshot`. If identical weather data is returned across multiple polling cycles, only one snapshot is stored while each attempt is logged in `SyncAttempt` with timestamps, durations, and HTTP statuses. The current forecast follows the latest verified successful attempt, including when content changes A→B→A.
@@ -125,7 +125,20 @@ celery -A crewcast worker -l info
 celery -A crewcast beat -l info
 ```
 
-The development server alone does not fetch live forecasts. The provided Docker Compose file is local-development only: its services bind to loopback and use development credentials. Do not expose it publicly. The image's default web command uses Gunicorn and `DEBUG=False`, and startup now requires a unique `SECRET_KEY`, explicit `ALLOWED_HOSTS`, and PostgreSQL `DATABASE_URL`. Before a public deployment, also set `DEMO_MODE=True`, configure HTTPS at the edge, run `collectstatic`, and run the worker and scheduler alongside the web app. Review or disable any old `dispatcher` login before ever enabling manager writes.
+The development server alone does not fetch live forecasts. The provided Docker Compose file is local-development only: its services bind to loopback and use development credentials. Do not expose it publicly. The image's default web command uses Gunicorn and `DEBUG=False`, and startup requires a unique `SECRET_KEY`, explicit `ALLOWED_HOSTS`, and PostgreSQL `DATABASE_URL`. Before a public deployment, also set `DEMO_MODE=True`, configure HTTPS at the edge, run `collectstatic`, and choose either the Celery processes or the GitHub Actions schedule below. Review or disable any old `dispatcher` login before ever enabling manager writes.
+
+## Scheduled forecast refresh with GitHub Actions
+
+The workflow in `.github/workflows/forecast-sync.yml` checks due sites hourly at minute 17 UTC. It invokes `python manage.py sync_due_forecasts` once, then exits; it is not an always-on worker. GitHub schedules can be delayed or occasionally dropped, so the website continues to show forecast age and suppresses stale recommendations. The workflow is disabled until a shared hosted PostgreSQL database exists.
+
+To activate it for a hosted demo:
+
+1. Provision a PostgreSQL database reachable over TLS from both the website and GitHub-hosted runners. For Neon Free, use the pooled connection URL for normal web and scheduled-job traffic, and the direct (non-`-pooler`) URL for migrations and seed commands. Do not use the local SQLite file or the Docker Compose database; neither is accessible to GitHub Actions. Include `sslmode=require` (or stronger provider-recommended TLS options) in the connection URLs.
+2. Deploy the Django web process with the same pooled `DATABASE_URL` as the scheduled job, a unique `SECRET_KEY`, `DEBUG=False`, explicit `ALLOWED_HOSTS`, `DEMO_MODE=True`, and `FORECAST_RUNNER=github_actions`. Run `python manage.py migrate` and `python manage.py seed_demo_data` using the direct URL, and `python manage.py collectstatic --noinput` during deployment. Do not run Celery Beat at the same time as the GitHub schedule.
+3. In the repository's **Settings → Secrets and variables → Actions**, add secrets `DATABASE_URL` and `CREWCAST_SECRET_KEY`. Use the hosted database URL and a unique secret value; never commit either one. Add repository variable `CREWCAST_FORECAST_ENABLED` with value `true` only after the database has been migrated and seeded.
+4. Run **Forecast refresh → Run workflow** once, then check the run result and `/operations/`. The database-backed scheduled-check card records the last invocation even when no site was due. The web pages and the workflow must point to the same database.
+
+The workflow does not host Django or PostgreSQL. Without a deployed web app and shared database, publishing the repository alone will not produce a public live-data website. If the cache is not hosted, reads fall back to PostgreSQL; Redis is not required for this scheduled path. GitHub may disable scheduled workflows in a public repository after 60 days without repository activity; re-enable the workflow if that happens.
 
 ---
 

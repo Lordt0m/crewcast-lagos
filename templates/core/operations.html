@@ -20,7 +20,32 @@
 
 <!-- 1. Infrastructure Status Cards -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-8);">
-  
+  {% if forecast_runner == 'github_actions' %}
+  <div class="card" style="padding: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+      <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
+        Scheduled forecast check
+      </span>
+      {% if scheduled_run.status == 'ok' %}
+        <span class="badge status-suitable">Recent</span>
+      {% elif scheduled_run.status == 'running' %}
+        <span class="badge status-caution">Running</span>
+      {% elif scheduled_run.status == 'failed' %}
+        <span class="badge status-unsuitable">Failed</span>
+      {% elif scheduled_run.status == 'stale' %}
+        <span class="badge status-caution">Overdue</span>
+      {% else %}
+        <span class="badge status-caution">Not started</span>
+      {% endif %}
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
+      {{ scheduled_run.last_seen|default:"Not recorded" }}
+    </div>
+    <div style="font-size: 0.8125rem; color: var(--color-text-secondary);">
+      Last check: {{ scheduled_run.age_display }} ago · {{ scheduled_run.attempt_count }} site attempts
+    </div>
+  </div>
+  {% else %}
   <!-- Worker Heartbeat -->
   <div class="card" style="padding: var(--space-5);">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
@@ -64,6 +89,7 @@
       Beat tick: {{ scheduler_hb.age_display }} ago
     </div>
   </div>
+  {% endif %}
 
   <!-- Cache / Redis -->
   <div class="card" style="padding: var(--space-5);">

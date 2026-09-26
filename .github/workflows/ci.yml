@@ -61,6 +61,7 @@ jobs:
         run: |
           python manage.py check
           python manage.py migrate
+          python manage.py collectstatic --noinput
 
       - name: Run Tests with PostgreSQL and Redis
         env:

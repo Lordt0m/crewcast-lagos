@@ -120,6 +120,24 @@ def test_operations_dashboard_renders_all_telemetry(client, ops_test_data, setti
 
 
 @pytest.mark.django_db
+def test_public_operations_hides_raw_provider_errors(client, ops_test_data, settings):
+    attempt = SyncAttempt.objects.get(site=ops_test_data['site'])
+    attempt.outcome = 'transient_failure'
+    attempt.error_message = 'Open-Meteo timeout: _ssl.c:1015 internal detail'
+    attempt.save(update_fields=['outcome', 'error_message'])
+
+    settings.DEMO_MODE = True
+    public_html = client.get('/operations/').content.decode('utf-8')
+    assert 'Transient Fail' in public_html
+    assert 'Forecast update failed; awaiting retry.' in public_html
+    assert '_ssl.c:1015' not in public_html
+
+    settings.DEMO_MODE = False
+    internal_html = client.get('/operations/').content.decode('utf-8')
+    assert '_ssl.c:1015' in internal_html
+
+
+@pytest.mark.django_db
 def test_unverified_legacy_budget_is_not_described_as_confirmed_usage(client, ops_test_data):
     budget = ops_test_data['budget']
     budget.source_kind = 'unknown'

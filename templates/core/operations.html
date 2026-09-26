@@ -284,8 +284,8 @@
                   </div>
                 {% endif %}
                 {% if row.last_error %}
-                  <div style="color: var(--color-text-muted); font-size: 0.75rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.last_error }}">
-                    {{ row.last_error }}
+                  <div style="color: var(--color-text-muted); font-size: 0.75rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"{% if not DEMO_MODE %} title="{{ row.last_error }}"{% endif %}>
+                    {% if DEMO_MODE %}Forecast update failed; awaiting retry.{% else %}{{ row.last_error }}{% endif %}
                   </div>
                 {% elif not row.next_retry_wat %}
                   <span style="color: var(--color-text-muted);">None</span>
@@ -362,7 +362,7 @@
                 {% if att.snapshot_hash %}
                   <span style="font-family: var(--font-mono); color: var(--color-text-secondary);">Hash: {{ att.snapshot_hash }}</span>
                 {% elif att.error_message %}
-                  <span style="color: var(--color-status-unsuitable); max-width: 250px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ att.error_message }}">{{ att.error_message }}</span>
+                  <span style="color: var(--color-status-unsuitable); max-width: 250px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"{% if not DEMO_MODE %} title="{{ att.error_message }}"{% endif %}>{% if DEMO_MODE %}Forecast update failed; awaiting retry.{% else %}{{ att.error_message }}{% endif %}</span>
                 {% else %}
                   <span style="color: var(--color-text-muted);">—</span>
                 {% endif %}

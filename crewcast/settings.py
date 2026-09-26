@@ -114,14 +114,23 @@ else:
     }
 
 # Cache Configuration
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': REDIS_URL,
-        'TIMEOUT': 1800, # 30 minutes max TTL
+REDIS_URL = os.getenv('REDIS_URL')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'TIMEOUT': 1800, # 30 minutes max TTL
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            # The scheduled GitHub worker cannot invalidate a web process's
+            # local cache. Without shared Redis, read current data from the DB.
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    }
 
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')

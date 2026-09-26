@@ -128,11 +128,16 @@ def test_demo_mode_blocks_all_mutations_server_side(manager_client, settings):
 
 @pytest.mark.django_db
 def test_demo_mode_banner_displayed_in_ui(client, settings):
-    """Verify demo mode warning banner is present in base HTML when active."""
+    """Verify demo mode warning banner is present in base HTML with durable wording and no outdated claims."""
     settings.DEMO_MODE = True
     response = client.get('/')
     assert response.status_code == 200
-    assert "Demo Mode:" in response.content.decode('utf-8')
+    html = response.content.decode('utf-8')
+    assert "Demo Mode:" in html
+    assert "Read-only" in html
+    assert "example jobs" in html
+    assert "Live forecasts appear after the first worker sync" not in html
+    assert "Open-Meteo" in html
 
 
 @pytest.mark.django_db

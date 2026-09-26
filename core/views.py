@@ -474,19 +474,25 @@ def health_check_view(request):
 
     # 2. Cache / Broker check
     cache_accessible = False
-    try:
-        test_key = 'crewcast:health:ping'
-        cache.set(test_key, 'pong', timeout=10)
-        cached_val = cache.get(test_key)
-        if cached_val == 'pong':
-            components['cache']['status'] = 'ok'
-            cache_accessible = True
-        else:
+    if not settings.REDIS_URL:
+        components['cache'] = {
+            'status': 'not_configured',
+            'detail': 'Shared cache disabled; reads use PostgreSQL',
+        }
+    else:
+        try:
+            test_key = 'crewcast:health:ping'
+            cache.set(test_key, 'pong', timeout=10)
+            cached_val = cache.get(test_key)
+            if cached_val == 'pong':
+                components['cache']['status'] = 'ok'
+                cache_accessible = True
+            else:
+                components['cache']['status'] = 'degraded'
+                components['cache']['detail'] = 'Cache read mismatch'
+        except Exception as exc:
             components['cache']['status'] = 'degraded'
-            components['cache']['detail'] = 'Cache read mismatch'
-    except Exception as exc:
-        components['cache']['status'] = 'degraded'
-        components['cache']['error'] = str(exc)
+            components['cache']['error'] = str(exc)
 
     if settings.FORECAST_RUNNER == 'github_actions':
         if components['database']['status'] == 'ok':
@@ -568,7 +574,7 @@ def operations_view(request):
     """
     Operations dashboard displaying:
     - Worker and scheduler heartbeat status
-    - Cache & broker connectivity and latency
+    - Cache & broker connectivity and latency when Redis is configured
     - Daily budget tracking (Africa/Lagos calendar)
     - Provider circuit breaker status
     - Per-site sync timeline & retry schedule
@@ -581,23 +587,22 @@ def operations_view(request):
     now_lagos = now.astimezone(LAGOS_TZ)
     today_lagos = now_lagos.date()
 
-    # 1. Cache Health & roundtrip check
-    cache_health = {'status': 'ok', 'latency_ms': None, 'detail': 'Connected to Redis'}
-    t0 = timezone.now()
-    try:
-        cache.set('crewcast:health:ping', 'pong', timeout=10)
-        val = cache.get('crewcast:health:ping')
-        if val == 'pong':
-            latency = (timezone.now() - t0).total_seconds() * 1000
-            cache_health['latency_ms'] = round(latency, 2)
-        else:
+    cache_health = None
+    if not settings.DEMO_MODE and settings.REDIS_URL:
+        cache_health = {'status': 'ok', 'latency_ms': None, 'detail': 'Connected to Redis'}
+        t0 = timezone.now()
+        try:
+            cache.set('crewcast:health:ping', 'pong', timeout=10)
+            if cache.get('crewcast:health:ping') == 'pong':
+                cache_health['latency_ms'] = round((timezone.now() - t0).total_seconds() * 1000, 2)
+            else:
+                cache_health['status'] = 'degraded'
+                cache_health['detail'] = 'Cache read mismatch'
+        except Exception as exc:
             cache_health['status'] = 'degraded'
-            cache_health['detail'] = 'Cache read mismatch'
-    except Exception as exc:
-        cache_health['status'] = 'degraded'
-        cache_health['detail'] = f'Redis unreachable ({exc})'
+            cache_health['detail'] = f'Redis unreachable ({exc})'
 
-    # 2. Worker Heartbeat
+    # 1. Worker Heartbeat
     worker_hb = {'status': 'inactive', 'last_seen': None, 'age_display': 'Never seen'}
     try:
         w_val = cache.get(WORKER_HEARTBEAT_CACHE_KEY)

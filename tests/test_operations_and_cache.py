@@ -98,8 +98,9 @@ def ops_test_data(db):
 
 
 @pytest.mark.django_db
-def test_operations_dashboard_renders_all_telemetry(client, ops_test_data):
+def test_operations_dashboard_renders_all_telemetry(client, ops_test_data, settings):
     """Ticket 09: operations dashboard displays heartbeats, budget, circuit, and per-site sync timeline."""
+    settings.DEMO_MODE = True
     response = client.get('/operations/')
     assert response.status_code == 200
     html = response.content.decode('utf-8')
@@ -107,7 +108,7 @@ def test_operations_dashboard_renders_all_telemetry(client, ops_test_data):
     # Worker & scheduler heartbeats
     assert "Celery Worker" in html
     assert "Celery Beat" in html
-    assert "Redis Cache" in html
+    assert "Redis Cache" not in html
     assert "Provider Circuit" in html
     assert "Active" in html
 
@@ -165,16 +166,19 @@ def test_board_cache_hit_advances_displayed_age(client, ops_test_data, monkeypat
 
 
 @pytest.mark.django_db
-def test_redis_cache_loss_falls_back_to_postgresql(client, ops_test_data, monkeypatch):
+def test_redis_cache_loss_falls_back_to_postgresql(client, ops_test_data, monkeypatch, settings):
     """
     Ticket 09 Check: Redis cache loss falls back to PostgreSQL.
     """
     url = f"/?date={ops_test_data['date_str']}"
+    settings.DEMO_MODE = True
+    settings.REDIS_URL = 'redis://localhost:6379/0'
 
-    def mock_broken_cache_get(*args, **kwargs):
+    def mock_broken_cache(*args, **kwargs):
         raise ConnectionError("Redis server connection refused")
 
-    monkeypatch.setattr(cache, "get", mock_broken_cache_get)
+    monkeypatch.setattr(cache, "get", mock_broken_cache)
+    monkeypatch.setattr(cache, "set", mock_broken_cache)
 
     # 1. Job board still loads successfully from PostgreSQL database
     res_board = client.get(url)
@@ -182,11 +186,25 @@ def test_redis_cache_loss_falls_back_to_postgresql(client, ops_test_data, monkey
     assert "Antenna Calibration" in res_board.content.decode('utf-8')
     assert res_board.headers.get('X-CrewCast-Cache') == 'MISS'
 
-    # 2. Operations view still loads successfully with degraded status
+    # 2. Operations view still loads successfully with no Redis card
     res_ops = client.get('/operations/')
     assert res_ops.status_code == 200
     html_ops = res_ops.content.decode('utf-8')
-    assert "Degraded" in html_ops
+    assert "Redis Cache" not in html_ops
+
+    # 3. Health check accurately reports cache failure diagnostics
+    res_health = client.get('/health/')
+    assert res_health.status_code == 200
+    health_data = res_health.json()
+    assert health_data['components']['cache']['status'] == 'degraded'
+    assert 'Redis server connection refused' in str(health_data['components']['cache'])
+
+    # A configured Redis failure remains visible on the non-demo dashboard.
+    settings.DEMO_MODE = False
+    res_internal_ops = client.get('/operations/')
+    assert res_internal_ops.status_code == 200
+    assert 'Redis Cache' in res_internal_ops.content.decode('utf-8')
+    assert 'Degraded' in res_internal_ops.content.decode('utf-8')
 
 
 @pytest.mark.django_db

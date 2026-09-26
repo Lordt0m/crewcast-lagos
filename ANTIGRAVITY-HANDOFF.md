@@ -1,6 +1,18 @@
 # Antigravity handoff — CrewCast Lagos
 
-## Instruction to paste into Antigravity
+## Current task — portfolio-readiness pass (26 September 2026)
+
+CrewCast already exists at `C:\Users\Lord\Documents\Projects\CrewCast Lagos`. Work in that repository; the original build brief below is historical context, not a request to start a new project. Inspect `git status` first and preserve all existing modified and untracked work. Keep `.env.local`, connection strings, and other secrets out of Git. The public demo must remain read-only, with synthetic jobs and real forecast data clearly distinguished.
+
+Implement these three focused fixes:
+
+1. **Scheduled forecasts:** Investigate why GitHub Actions has not visibly run the hourly forecast workflow automatically since it was enabled. At the last check on 26 September 2026, the `workflow_dispatch` run succeeded, `CREWCAST_FORECAST_ENABLED` was `true`, and the workflow was active, but no later `schedule` run appeared. Recheck current run history and configuration before changing code. Fix any repo-controlled cause and add appropriate tests or checks. A manual run does not prove scheduling works. Report an actual successful `schedule` event if one occurs; otherwise state plainly that live scheduling remains unverified and what is needed to verify it after deployment.
+2. **Public Operations page:** Remove the Redis Cache card from the public Operations page. Redis is an optional implementation detail and is intentionally absent from this hosted demo; do not replace the card with a “Not configured” or “Degraded” card. Preserve the PostgreSQL fallback and accurate cache diagnostics in the health checks, including a genuine failure signal when Redis is explicitly configured but unreachable. Verify that the public page has no Redis card and that cache failure does not break the job board.
+3. **Demo banner:** Replace “Live forecasts appear after the first worker sync” with durable, accurate wording. State that the demo is read-only and the jobs are examples; let the existing forecast-age and freshness UI convey whether live data is current. Keep the server-side write block and Open-Meteo attribution. Verify the old claim is absent and state-changing web requests remain forbidden in demo mode.
+
+Run focused tests, the full test suite, and Django checks. Keep the established design and architecture. Leave changes uncommitted; do not push, deploy, or edit Ayotomiwa's portfolio. Return the changed-file list, test results, evidence for each acceptance check, and any remaining blocker. Codex will review the implementation, verify the live deployment and scheduled run, then handle the portfolio entry.
+
+## Original build instruction (historical reference; do not repeat for the current task)
 
 Open a new CrewCast Lagos application repository. Copy this planning pack into the repository first and read `README.md`, `product-spec.md`, `CONTEXT.md`, `architecture.md`, `interface-brief.md`, `delivery-tickets.md`, and both ADRs before planning code changes. Inspect the new repository's existing instructions and state. Create an implementation plan artifact broken into the numbered tickets, then implement and verify one ticket at a time. Show the owner the plan artifact at the normal Antigravity review point. Keep progress and actual test evidence in the repository; do not claim a ticket is complete before its checks pass.
 

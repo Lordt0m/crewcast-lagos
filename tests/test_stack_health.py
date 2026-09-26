@@ -34,6 +34,14 @@ def test_health_check_endpoint():
     assert 'cache' in components
     assert 'worker_heartbeat' in components
 
+
+@pytest.mark.django_db
+def test_health_check_reports_intentionally_disabled_shared_cache(settings):
+    settings.REDIS_URL = None
+    response = Client().get('/health/')
+    assert response.status_code == 200
+    assert response.json()['components']['cache']['status'] == 'not_configured'
+
 @pytest.mark.django_db
 def test_worker_heartbeat_recording():
     """Verify that the Celery worker heartbeat task records liveness correctly."""

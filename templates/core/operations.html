@@ -91,7 +91,8 @@
   </div>
   {% endif %}
 
-  <!-- Cache / Redis -->
+  {% if cache_health %}
+  <!-- Cache diagnostics for the non-demo operations view -->
   <div class="card" style="padding: var(--space-5);">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
       <span style="font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">
@@ -110,6 +111,7 @@
       {{ cache_health.detail }}
     </div>
   </div>
+  {% endif %}
 
   <!-- Provider Circuit Breaker -->
   <div class="card" style="padding: var(--space-5);">

@@ -13,12 +13,14 @@ def configure_test_cache(settings):
     so unit tests run deterministically and fast without external dependencies.
     """
     redis_available = False
-    try:
-        r = redis.from_url(settings.REDIS_URL, socket_connect_timeout=0.2)
-        r.ping()
-        redis_available = True
-    except Exception:
-        redis_available = False
+    redis_url = getattr(settings, 'REDIS_URL', None)
+    if redis_url:
+        try:
+            r = redis.from_url(redis_url, socket_connect_timeout=0.2)
+            r.ping()
+            redis_available = True
+        except Exception:
+            redis_available = False
 
     if os.getenv('CREWCAST_REQUIRE_EXTERNAL_SERVICES') == '1':
         if connection.vendor != 'postgresql':

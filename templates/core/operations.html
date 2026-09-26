@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 
-{% block title %}Operations & Telemetry — CrewCast Lagos{% endblock %}
+{% block title %}Forecast operations — CrewCast Lagos{% endblock %}
 
 {% block content %}
 <div style="margin-bottom: var(--space-8);">
   <h1 style="font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: var(--space-2); color: var(--color-text-primary);">
-    Operations & Pipeline Telemetry
+    Forecast operations
   </h1>
   <p style="color: var(--color-text-secondary); font-size: 1rem; max-width: 720px; line-height: 1.5;">
-    Real-time infrastructure health, background scheduler heartbeat, daily Open-Meteo API budget tracking, and per-site synchronization pipeline.
+    See when forecasts last updated, what may be delaying the next update, and how many requests remain today.
   </p>
 </div>
+
+{% if legacy_unverified_present %}
+  <aside class="banner banner-stale" role="status" style="margin-bottom: var(--space-6);">
+    Older forecast records are unverified and excluded from live planning. Legacy quota records may also contain demo seed values.
+  </aside>
+{% endif %}
 
 <!-- 1. Infrastructure Status Cards -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-8);">
@@ -113,11 +119,16 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-4);">
       <div>
         <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
-          Daily Provider Budget (Africa/Lagos Calendar)
+          Forecast requests today
         </h2>
         <p style="color: var(--color-text-secondary); font-size: 0.875rem;">
-          {{ budget.date_display }} · Strict atomic quota of 300 provider requests/day.
+          {{ budget.date_display }} · Daily limit of 300 reserved requests, counted in Lagos time.
         </p>
+        {% if not budget.verified %}
+          <p role="status" style="color: var(--color-status-caution); font-size: 0.875rem; margin-top: var(--space-2);">
+            This day's quota ledger contains unverified legacy values. Counts protect the limit but are not confirmed provider usage.
+          </p>
+        {% endif %}
       </div>
       <div style="text-align: right;">
         <span style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-mono); color: var(--color-text-primary);">
@@ -175,7 +186,7 @@
 <section style="margin-bottom: var(--space-8);">
   <div class="card" style="padding: var(--space-6);">
     <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
-      Per-Site Synchronization Timeline
+      Forecast updates by site
     </h2>
     <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: var(--space-5);">
       Scheduled 3-hour retrieval cycle across all active sites in Lagos State.
@@ -270,7 +281,7 @@
 <section style="margin-bottom: var(--space-8);">
   <div class="card" style="padding: var(--space-6);">
     <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-1);">
-      Recent Outbound Sync Attempts Log
+      Recent forecast update attempts
     </h2>
     <p style="color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: var(--space-5);">
       Immutable history of recent outbound requests, HTTP statuses, and content snapshot links.

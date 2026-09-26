@@ -50,10 +50,18 @@ def test_identical_responses_create_two_attempts_one_snapshot(site_lekki):
     first_sync_time = site_lekki.last_successful_sync_at
     assert first_sync_time is not None
 
+    # An older unverified copy of this content becomes trusted only after a
+    # fresh provider retrieval confirms it.
+    old_snapshot = ForecastSnapshot.objects.get(site=site_lekki)
+    old_snapshot.source_kind = 'unknown'
+    old_snapshot.save(update_fields=['source_kind'])
+
     # Second sync with identical fixture payload
     t2 = timezone.now()
     res2 = sync_site(site_lekki, provider=provider, force=True, now=t2)
     assert res2.outcome == "success"
+    old_snapshot.refresh_from_db()
+    assert old_snapshot.source_kind == 'provider'
 
     # Invariant checks:
     # 1. Deduplicated snapshot: still only 1 snapshot in database
@@ -161,6 +169,25 @@ def test_site_is_due_interval(site_lekki):
 
     # Synced 2 hours ago -> not due
     site_lekki.last_successful_sync_at = now - timedelta(hours=2)
+    assert site_lekki.is_due(now) is True  # Timestamp alone is not proof of a provider sync.
+    ForecastSnapshot.objects.create(
+        site=site_lekki,
+        content_hash='verified-sync-for-due-test',
+        returned_latitude=site_lekki.latitude,
+        returned_longitude=site_lekki.longitude,
+        hourly_data={},
+        coverage_start=now,
+        coverage_end=now,
+        hours_count=0,
+    )
+    SyncAttempt.objects.create(
+        site=site_lekki,
+        planned_at=site_lekki.last_successful_sync_at,
+        started_at=site_lekki.last_successful_sync_at,
+        completed_at=site_lekki.last_successful_sync_at,
+        outcome='success',
+        snapshot=ForecastSnapshot.objects.get(site=site_lekki),
+    )
     assert site_lekki.is_due(now) is False
 
     # Synced 3 hours 1 second ago -> due

@@ -27,6 +27,7 @@ from .services.freshness import get_freshness_state, get_effective_planning_disp
 from .evaluator import get_intersecting_hour_instants
 from .services.evaluation_service import evaluate_and_record_job
 from .services.cache_service import get_board_cache_version, invalidate_board_cache, BOARD_CACHE_TTL_SECONDS
+from .services.forecast_selection import latest_verified_success
 
 
 def demo_mode_guard(view_func):
@@ -88,7 +89,7 @@ def job_board_view(request):
 
     # 2. Cache query for heavy job and recommendation data
     cache_version = get_board_cache_version()
-    cache_key = f"crewcast:board:payload:v{cache_version}:{selected_date_str}"
+    cache_key = f"crewcast:board:payload:retrieval:v{cache_version}:{selected_date_str}"
     cached_payload = None
     cache_hit = False
 
@@ -131,18 +132,18 @@ def job_board_view(request):
         ).select_related('site', 'policy_version').order_by('start_time', 'title')
 
         jobs_data = []
+        current_attempts = {}
         for job in jobs:
             site = job.site
+            if site.pk not in current_attempts:
+                current_attempts[site.pk] = latest_verified_success(site)
+            current_attempt = current_attempts[site.pk]
             latest_rec = Recommendation.objects.filter(
                 job=job,
                 job_revision=job.revision,
-                policy_version=job.policy_version
+                policy_version=job.policy_version,
+                snapshot_id=current_attempt.snapshot_id if current_attempt else None,
             ).order_by('-evaluated_at').first()
-
-            if not latest_rec:
-                latest_snapshot = ForecastSnapshot.objects.filter(site=site).order_by('-first_retrieved_at').first()
-                if latest_snapshot:
-                    latest_rec, _ = evaluate_and_record_job(job, latest_snapshot)
 
             primary_reason = ""
             if latest_rec and latest_rec.reasons:
@@ -154,12 +155,17 @@ def job_board_view(request):
                 'site_name': site.name,
                 'start_iso': job.start_time.isoformat(),
                 'end_iso': job.end_time.isoformat(),
-                'last_sync_iso': site.last_successful_sync_at.isoformat() if site.last_successful_sync_at else None,
+                'last_sync_iso': current_attempt.completed_at.isoformat() if current_attempt and current_attempt.completed_at else None,
                 'rec_status': latest_rec.status if latest_rec else None,
                 'primary_reason': primary_reason,
             })
 
-        most_recent_sync = Site.objects.filter(is_active=True).order_by('-last_successful_sync_at').values_list('last_successful_sync_at', flat=True).first()
+        most_recent_sync = SyncAttempt.objects.filter(
+            site__is_active=True,
+            source_kind='worker',
+            outcome='success',
+            snapshot__source_kind='provider',
+        ).order_by('-completed_at', '-pk').values_list('completed_at', flat=True).first()
 
         cached_payload = {
             'horizon_days': horizon_days,
@@ -259,21 +265,22 @@ def job_detail_view(request, pk):
     job = get_object_or_404(Job.objects.select_related('site', 'policy_version'), pk=pk)
     site = job.site
 
+    current_attempt = latest_verified_success(site)
+    latest_snapshot = current_attempt.snapshot if current_attempt else None
+    verified_sync_at = current_attempt.completed_at if current_attempt else None
+
     # Freshness
-    freshness_state, age_seconds = get_freshness_state(site.last_successful_sync_at, now=now)
-    if site.last_successful_sync_at is None:
+    freshness_state, age_seconds = get_freshness_state(verified_sync_at, now=now)
+    if verified_sync_at is None:
         freshness_state = 'pending'
 
     # Current recommendation
     current_rec = Recommendation.objects.filter(
         job=job,
         job_revision=job.revision,
-        policy_version=job.policy_version
+        policy_version=job.policy_version,
+        snapshot=latest_snapshot,
     ).order_by('-evaluated_at').first()
-
-    latest_snapshot = ForecastSnapshot.objects.filter(site=site).order_by('-first_retrieved_at').first()
-    if not current_rec and latest_snapshot:
-        current_rec, _ = evaluate_and_record_job(job, latest_snapshot)
 
     effective_display = get_effective_planning_display(current_rec.status if current_rec else None, freshness_state)
 
@@ -300,7 +307,9 @@ def job_detail_view(request, pk):
                 })
 
     # Prior recommendations for comparison
-    prior_recs = Recommendation.objects.filter(job=job).select_related('policy_version', 'snapshot').order_by('-evaluated_at')[:10]
+    prior_recs = Recommendation.objects.filter(
+        job=job, snapshot__source_kind='provider'
+    ).select_related('policy_version', 'snapshot').order_by('-evaluated_at')[:10]
 
     start_lagos = job.start_time.astimezone(LAGOS_TZ)
     end_lagos = job.end_time.astimezone(LAGOS_TZ)
@@ -308,7 +317,7 @@ def job_detail_view(request, pk):
 
     retrieval_age_text = (
         f"Forecast retrieved {format_duration_ago(age_seconds)} ago"
-        if site.last_successful_sync_at else "Waiting for first sync"
+        if verified_sync_at else "Waiting for first sync"
     )
 
     context = {
@@ -337,7 +346,8 @@ def job_create_view(request):
             job.save()
 
             # Attempt initial evaluation with latest stored snapshot if available
-            latest_snap = ForecastSnapshot.objects.filter(site=job.site).order_by('-first_retrieved_at').first()
+            current_attempt = latest_verified_success(job.site)
+            latest_snap = current_attempt.snapshot if current_attempt else None
             if latest_snap:
                 evaluate_and_record_job(job, latest_snap)
 
@@ -358,7 +368,8 @@ def job_edit_view(request, pk):
         form = JobForm(request.POST, instance=job)
         if form.is_valid():
             job = form.save()
-            latest_snap = ForecastSnapshot.objects.filter(site=job.site).order_by('-first_retrieved_at').first()
+            current_attempt = latest_verified_success(job.site)
+            latest_snap = current_attempt.snapshot if current_attempt else None
             if latest_snap:
                 evaluate_and_record_job(job, latest_snap)
 
@@ -390,7 +401,7 @@ def site_create_view(request):
 @demo_mode_guard
 def policy_edit_view(request):
     """Manager view to review or update default weather policy (creates a new version)."""
-    current_policy = WeatherPolicyVersion.get_latest_default()
+    current_policy = WeatherPolicyVersion.objects.first()
     if request.method == 'POST':
         form = WeatherPolicyForm(request.POST)
         if form.is_valid():
@@ -595,10 +606,11 @@ def operations_view(request):
         'deferred': deferred,
         'remaining': remaining,
         'percentage_used': pct_used,
+        'verified': budget is None or budget.source_kind == 'worker',
     }
 
     # 5. Provider Circuit Breaker
-    circuit = ProviderCircuitState.get_instance()
+    circuit = ProviderCircuitState.objects.filter(id=1).first() or ProviderCircuitState()
     cooloff_remaining = None
     if circuit.state == 'OPEN' and circuit.opened_at:
         elapsed = (now - circuit.opened_at).total_seconds()
@@ -617,16 +629,19 @@ def operations_view(request):
     sites_data = []
     active_sites = Site.objects.filter(is_active=True).order_by('name')
     for site in active_sites:
-        last_sync_wat = site.last_successful_sync_at.astimezone(LAGOS_TZ).strftime('%d %b %H:%M WAT') if site.last_successful_sync_at else "Never synced"
-        if site.last_successful_sync_at and site.next_sync_due_at:
-            next_due_wat = site.next_sync_due_at.astimezone(LAGOS_TZ).strftime('%d %b %H:%M WAT')
-            is_overdue = (site.next_sync_due_at <= now)
+        current_attempt = latest_verified_success(site)
+        verified_sync_at = current_attempt.completed_at if current_attempt else None
+        last_sync_wat = verified_sync_at.astimezone(LAGOS_TZ).strftime('%d %b %H:%M WAT') if verified_sync_at else "Never synced"
+        if verified_sync_at:
+            next_due = verified_sync_at + timedelta(hours=3)
+            next_due_wat = next_due.astimezone(LAGOS_TZ).strftime('%d %b %H:%M WAT')
+            is_overdue = (next_due <= now)
         else:
             next_due_wat = "Immediate (Pending)"
             is_overdue = True
-        f_state, f_age = get_freshness_state(site.last_successful_sync_at, now=now)
+        f_state, f_age = get_freshness_state(verified_sync_at, now=now)
 
-        latest_attempt = SyncAttempt.objects.filter(site=site).order_by('-started_at').first()
+        latest_attempt = SyncAttempt.objects.filter(site=site, source_kind='worker').order_by('-pk').first()
         last_outcome = latest_attempt.outcome if latest_attempt else "none"
         last_error = latest_attempt.error_message if (latest_attempt and latest_attempt.outcome != 'success') else ""
         next_retry_wat = latest_attempt.next_retry_at.astimezone(LAGOS_TZ).strftime('%H:%M:%S WAT') if (latest_attempt and latest_attempt.next_retry_at and latest_attempt.next_retry_at > now) else None
@@ -634,8 +649,8 @@ def operations_view(request):
         sites_data.append({
             'site': site,
             'last_sync_wat': last_sync_wat,
-            'last_sync_age': format_duration_ago(f_age) if site.last_successful_sync_at else "—",
-            'freshness_state': f_state if site.last_successful_sync_at else 'pending',
+            'last_sync_age': format_duration_ago(f_age) if verified_sync_at else "—",
+            'freshness_state': f_state if verified_sync_at else 'pending',
             'next_due_wat': next_due_wat,
             'is_overdue': is_overdue,
             'last_outcome': last_outcome,
@@ -645,7 +660,9 @@ def operations_view(request):
 
     # 7. Recent Sync Attempts Log
     recent_attempts = []
-    for att in SyncAttempt.objects.select_related('site', 'snapshot').order_by('-started_at')[:20]:
+    for att in SyncAttempt.objects.select_related('site', 'snapshot').filter(
+        source_kind='worker'
+    ).order_by('-started_at', '-pk')[:20]:
         dur_ms = None
         if att.completed_at and att.started_at:
             dur_ms = round((att.completed_at - att.started_at).total_seconds() * 1000, 1)
@@ -670,6 +687,11 @@ def operations_view(request):
         'circuit': circuit_info,
         'sites_data': sites_data,
         'recent_attempts': recent_attempts,
+        'legacy_unverified_present': (
+            ForecastSnapshot.objects.filter(source_kind='unknown').exists()
+            or SyncAttempt.objects.filter(source_kind='unknown').exists()
+            or BudgetWindow.objects.filter(source_kind='unknown').exists()
+        ),
     }
     return render(request, 'core/operations.html', context)
 

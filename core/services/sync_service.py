@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from django.conf import settings
@@ -12,6 +13,7 @@ from core.models import (
     SyncAttempt,
     ProviderCircuitState,
     LAGOS_TZ,
+    DUE_INTERVAL_HOURS,
 )
 from core.services.provider import (
     ForecastProvider,
@@ -42,6 +44,45 @@ def get_current_lagos_date(now: datetime = None):
     return now.astimezone(LAGOS_TZ).date()
 
 
+@dataclass(frozen=True)
+class SyncPlan:
+    planned_at: datetime
+    attempt_number: int
+
+
+def due_sync_plan(site: Site, now: datetime) -> SyncPlan | None:
+    """Respect retry deadlines, daily budget deferrals, and exhausted cycles."""
+    if not site.is_due(now):
+        return None
+
+    latest = SyncAttempt.objects.filter(site=site, source_kind='worker').order_by('-pk').first()
+    if latest and latest.outcome == 'deferred':
+        if (latest.failure_category == 'budget_exhausted'
+                and get_current_lagos_date(latest.started_at) == get_current_lagos_date(now)):
+            return None
+        if latest.next_retry_at and now < latest.next_retry_at:
+            return None
+        if latest.failure_category == 'budget_exhausted':
+            return SyncPlan(planned_at=now, attempt_number=1)
+        latest = (
+            SyncAttempt.objects.filter(site=site, source_kind='worker')
+            .exclude(outcome='deferred').order_by('-pk').first()
+        )
+
+    if latest and latest.outcome == 'transient_failure':
+        if latest.attempt_number < MAX_SYNC_ATTEMPTS and latest.next_retry_at:
+            if now < latest.next_retry_at:
+                return None
+            return SyncPlan(planned_at=latest.planned_at, attempt_number=latest.attempt_number + 1)
+
+    if latest and latest.outcome in ('transient_failure', 'permanent_failure'):
+        last_finished = latest.completed_at or latest.started_at
+        if now < last_finished + timedelta(hours=DUE_INTERVAL_HOURS):
+            return None
+
+    return SyncPlan(planned_at=now, attempt_number=1)
+
+
 def sync_site(
     site: Site,
     provider: ForecastProvider = None,
@@ -68,13 +109,22 @@ def sync_site(
     if not site.is_active:
         return SyncResult(outcome="skipped", reason="Site is inactive")
 
-    if not force and not site.is_due(now):
-        return SyncResult(outcome="skipped", reason="Site is not yet due (retrieved <3h ago)")
+    if not force:
+        plan = due_sync_plan(site, now)
+        if plan is None:
+            return SyncResult(outcome="skipped", reason="Site is not due or is waiting for its retry deadline")
+        planned_at = plan.planned_at
+        attempt_number = plan.attempt_number
 
     # 1. Circuit breaker check
     can_attempt, circuit_reason = ProviderCircuitState.can_attempt(now=now)
     if not can_attempt:
         logger.warning(f"Provider circuit prevents outbound fetch: {circuit_reason}")
+        circuit = ProviderCircuitState.objects.filter(id=1).first()
+        next_retry = now + timedelta(minutes=5)
+        if circuit and circuit.state == 'OPEN' and circuit.opened_at:
+            cooloff_end = circuit.opened_at + timedelta(seconds=circuit.cooloff_seconds)
+            next_retry = max(next_retry, cooloff_end)
         attempt = SyncAttempt.objects.create(
             site=site,
             planned_at=planned_at,
@@ -84,6 +134,7 @@ def sync_site(
             outcome="deferred",
             failure_category="circuit_open",
             error_message=f"Provider circuit breaker is {circuit_reason}",
+            next_retry_at=next_retry,
         )
         return SyncResult(outcome="deferred", attempt=attempt, reason=f"Circuit open: {circuit_reason}")
 
@@ -129,6 +180,7 @@ def sync_site(
                     site=site,
                     content_hash=norm.content_hash,
                     defaults={
+                        'source_kind': 'provider',
                         'returned_latitude': norm.returned_latitude,
                         'returned_longitude': norm.returned_longitude,
                         'returned_elevation': norm.returned_elevation,
@@ -138,6 +190,12 @@ def sync_site(
                         'hours_count': norm.hours_count,
                     }
                 )
+
+                # A genuine retrieval can verify content retained from an older
+                # installation where snapshot origin was not recorded.
+                if snapshot.source_kind != 'provider':
+                    snapshot.source_kind = 'provider'
+                    snapshot.save(update_fields=['source_kind'])
 
                 attempt = SyncAttempt.objects.create(
                     site=site,
@@ -156,9 +214,12 @@ def sync_site(
                 ProviderCircuitState.record_success()
 
             from .evaluation_service import evaluate_all_jobs_for_site
+            from .cache_service import invalidate_board_cache
+            # The active content version changed at commit. Do not serve a
+            # cached recommendation for the previous version while evaluation runs.
+            invalidate_board_cache()
             evaluate_all_jobs_for_site(site, snapshot)
 
-            from .cache_service import invalidate_board_cache
             invalidate_board_cache()
 
             logger.info(f"Sync succeeded for site '{site.name}'. Snapshot created={created}, hash={norm.content_hash[:8]}")
@@ -223,13 +284,13 @@ def sync_site(
 
 
 def check_and_sync_all_due_sites(provider: ForecastProvider = None, now: datetime = None) -> list[SyncResult]:
-    """Finds all active sites that are due and triggers synchronization."""
+    """Synchronize active sites whose normal or retry window is due."""
     if now is None:
         now = timezone.now()
 
     results = []
-    due_sites = [s for s in Site.objects.filter(is_active=True) if s.is_due(now)]
-    for site in due_sites:
+    for site in Site.objects.filter(is_active=True):
         res = sync_site(site, provider=provider, now=now)
-        results.append(res)
+        if res.outcome != 'skipped':
+            results.append(res)
     return results

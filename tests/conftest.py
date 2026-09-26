@@ -1,5 +1,7 @@
+import os
 import pytest
 from django.core.cache import cache
+from django.db import connection
 import redis
 
 
@@ -17,6 +19,12 @@ def configure_test_cache(settings):
         redis_available = True
     except Exception:
         redis_available = False
+
+    if os.getenv('CREWCAST_REQUIRE_EXTERNAL_SERVICES') == '1':
+        if connection.vendor != 'postgresql':
+            pytest.fail('Integration run requires PostgreSQL; refusing SQLite fallback.')
+        if not redis_available:
+            pytest.fail('Integration run requires Redis; refusing LocMemCache fallback.')
 
     if not redis_available:
         settings.CACHES = {

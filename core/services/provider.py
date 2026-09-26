@@ -1,9 +1,11 @@
 import json
 import logging
+from email.utils import parsedate_to_datetime
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from math import ceil
 import httpx
 from django.conf import settings
 from .normalizer import normalize_forecast_payload, NormalizedForecast
@@ -17,6 +19,24 @@ REQUESTED_HOURLY_VARIABLES = [
     "wind_gusts_10m",
     "apparent_temperature",
 ]
+
+
+def parse_retry_after(value: str | None, now: datetime | None = None) -> int | None:
+    """Accept Retry-After seconds or an HTTP date; ignore invalid values."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdecimal():
+        return int(value)
+    try:
+        retry_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=dt_timezone.utc)
+    if now is None:
+        now = datetime.now(dt_timezone.utc)
+    return max(0, ceil((retry_at - now).total_seconds()))
 
 
 class ForecastProviderError(Exception):
@@ -66,8 +86,9 @@ class OpenMeteoProvider(ForecastProvider):
                 response = client.get(OPEN_METEO_URL, params=params)
 
                 if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    retry_seconds = int(retry_after) if retry_after and retry_after.isdigit() else 60
+                    retry_seconds = parse_retry_after(response.headers.get("Retry-After"))
+                    if retry_seconds is None:
+                        retry_seconds = 60
                     raise TransientProviderError(
                         f"Open-Meteo rate limit reached (HTTP 429). Retry after {retry_seconds}s.",
                         status_code=429,
@@ -77,7 +98,8 @@ class OpenMeteoProvider(ForecastProvider):
                 if 500 <= response.status_code < 600:
                     raise TransientProviderError(
                         f"Open-Meteo upstream error (HTTP {response.status_code}).",
-                        status_code=response.status_code
+                        status_code=response.status_code,
+                        retry_after=parse_retry_after(response.headers.get("Retry-After")),
                     )
 
                 if 400 <= response.status_code < 500:

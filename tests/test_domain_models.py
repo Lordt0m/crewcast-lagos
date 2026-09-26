@@ -169,7 +169,8 @@ class TestJobModel:
 
 @pytest.mark.django_db
 class TestAuthorizationAndDemoMode:
-    def test_unauthorized_user_redirected_on_mutation(self, client):
+    def test_unauthorized_user_redirected_on_mutation(self, client, settings):
+        settings.DEMO_MODE = False
         response = client.post('/jobs/new/', {
             'title': 'Unauthorized Job',
         })

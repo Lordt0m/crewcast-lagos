@@ -4,9 +4,10 @@ import pytest
 from django.conf import settings
 from django.core.management import call_command
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from django.test import Client
 from django.utils import timezone
-from core.models import Site, Job, ForecastSnapshot, WeatherPolicyVersion, LAGOS_TZ
+from core.models import Site, Job, ForecastSnapshot, SyncAttempt, BudgetWindow, ProviderCircuitState, LAGOS_TZ
 from core.services.provider import OpenMeteoProvider
 
 
@@ -20,7 +21,7 @@ def manager_client(db):
 
 @pytest.mark.django_db
 def test_seed_demo_data_command():
-    """Verify that seed_demo_data populates 6 Lagos sites, jobs, and canned snapshots."""
+    """Example jobs never invent successful weather retrievals or credentials."""
     call_command('seed_demo_data', clear=True)
 
     # 1. Sites
@@ -29,7 +30,7 @@ def test_seed_demo_data_command():
     for s in sites:
         assert Decimal("6.38") <= s.latitude <= Decimal("6.72")
         assert Decimal("3.12") <= s.longitude <= Decimal("3.68")
-        assert s.last_successful_sync_at is not None
+        assert s.last_successful_sync_at is None
 
     # 2. Jobs
     jobs = Job.objects.all()
@@ -39,11 +40,27 @@ def test_seed_demo_data_command():
         start_lagos = j.start_time.astimezone(LAGOS_TZ)
         assert start_lagos.date() >= now_lagos.date()
 
-    # 3. Snapshots
-    assert ForecastSnapshot.objects.count() >= 6
+    # 3. No synthetic provider activity or budget consumption
+    assert ForecastSnapshot.objects.count() == 0
+    assert SyncAttempt.objects.count() == 0
+    assert BudgetWindow.objects.count() == 0
 
-    # 4. User
-    assert User.objects.filter(username="dispatcher").exists()
+    # 4. No public known-password account
+    assert not User.objects.filter(username="dispatcher").exists()
+
+
+@pytest.mark.django_db
+def test_legacy_seed_credential_cannot_authenticate_after_demo_mode_is_disabled(client, settings):
+    settings.DEMO_MODE = False
+    user = User.objects.create_user(username='dispatcher', password='crewcast2026')
+    assert authenticate(username='dispatcher', password='crewcast2026') is None
+
+    client.force_login(user)
+    assert client.get('/').wsgi_request.user.is_anonymous
+
+    user.set_password('new-private-password-123')
+    user.save(update_fields=['password'])
+    assert authenticate(username='dispatcher', password='new-private-password-123') == user
 
 
 @pytest.mark.django_db
@@ -102,6 +119,12 @@ def test_demo_mode_blocks_all_mutations_server_side(manager_client, settings):
     })
     assert res_policy.status_code == 403
 
+    # Authentication and admin endpoints are covered by the same boundary.
+    assert manager_client.post('/logout/').status_code == 403
+    anonymous = Client()
+    assert anonymous.post('/login/', {'username': 'dispatcher', 'password': 'crewcast2026'}).status_code == 403
+    assert anonymous.post('/admin/login/', {'username': 'dispatcher', 'password': 'crewcast2026'}).status_code == 403
+
 
 @pytest.mark.django_db
 def test_demo_mode_banner_displayed_in_ui(client, settings):
@@ -110,6 +133,13 @@ def test_demo_mode_banner_displayed_in_ui(client, settings):
     response = client.get('/')
     assert response.status_code == 200
     assert "Demo Mode:" in response.content.decode('utf-8')
+
+
+@pytest.mark.django_db
+def test_operations_get_does_not_create_circuit_row(client):
+    assert ProviderCircuitState.objects.count() == 0
+    assert client.get('/operations/').status_code == 200
+    assert ProviderCircuitState.objects.count() == 0
 
 
 @pytest.mark.django_db

@@ -3,50 +3,58 @@
 {% block title %}Job Board — CrewCast Lagos{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-6);">
-  <div>
-    <h1>Scheduled outdoor jobs</h1>
-    <p style="color: var(--color-text-secondary); max-width: 65ch;">
-      Comparing scheduled work windows against latest forecasts in Africa/Lagos.
-    </p>
+<div class="board-intro">
+  <div class="board-intro-copy">
+    <p class="eyebrow">CrewCast <span aria-hidden="true">/</span> Lagos</p>
+    <h1>Plan the workday</h1>
+    <p class="board-lede">Outdoor jobs, forecast decisions, and the reasons behind them—all in one place.</p>
   </div>
-  {% if user.is_authenticated and not DEMO_MODE %}
-    <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
-  {% endif %}
+  <div class="board-intro-aside">
+    <div class="board-count"><strong>{{ total_jobs_count }}</strong><span>job{{ total_jobs_count|pluralize }} on this day</span></div>
+    {% if user.is_authenticated and not DEMO_MODE and total_jobs_count > 0 %}
+      <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
+    {% endif %}
+  </div>
 </div>
 
 <!-- 7-Day Planning Horizon Day Picker -->
+<div class="board-section-heading">
+  <div>
+    <p class="eyebrow">Seven-day outlook</p>
+    <h2>{{ selected_date_display }}</h2>
+  </div>
+  <span class="section-timezone">All times in WAT</span>
+</div>
 <nav class="day-picker" aria-label="Planning Horizon Days">
   {% for day in horizon_days %}
-    <a href="?date={{ day.date_str }}" class="day-tab {% if day.date_str == selected_date_str %}active{% endif %}">
+    <a href="?date={{ day.date_str }}" class="day-tab {% if day.date_str == selected_date_str %}active{% endif %}" {% if day.date_str == selected_date_str %}aria-current="date"{% endif %}>
       <span class="day-tab-weekday">{{ day.weekday }}</span>
       <span class="day-tab-date">{{ day.day_num }} {{ day.month }}</span>
-      <span style="font-size: 0.75rem; color: var(--color-text-muted);">{{ day.job_count }} job{{ day.job_count|pluralize }}</span>
+      <span class="day-tab-count">{{ day.job_count }} job{{ day.job_count|pluralize }}</span>
     </a>
   {% endfor %}
 </nav>
 
 <!-- Data Freshness Banner -->
 {% if board_freshness.state == 'pending' %}
-  <aside class="banner banner-fresh" role="status">
-    <div style="font-weight: 600;">Waiting for first forecast</div>
-    <div>Jobs will display planning recommendations once the scheduled worker retrieves initial data.</div>
+  <aside class="banner banner-fresh board-signal" role="status">
+    <span class="signal-mark" aria-hidden="true">!</span>
+    <div><strong>Waiting for first forecast</strong><p>Job recommendations will appear after the first worker sync.</p></div>
   </aside>
 {% elif board_freshness.state == 'stale' %}
-  <aside class="banner banner-stale" role="alert">
-    <div style="font-weight: 600;">Forecast is stale ({{ board_freshness.age_display }} old)</div>
-    <div>Review local conditions before using earlier recommendations. Suitable statuses are suppressed until fresh data arrives.</div>
+  <aside class="banner banner-stale board-signal" role="alert">
+    <span class="signal-mark" aria-hidden="true">!</span>
+    <div><strong>Forecast is stale ({{ board_freshness.age_display }} old)</strong><p>Review local conditions before using earlier recommendations. Suitable statuses are suppressed until fresh data arrives.</p></div>
   </aside>
 {% elif board_freshness.state == 'expired' %}
-  <aside class="banner banner-expired" role="alert">
-    <div style="font-weight: 600;">Forecast is expired (>12h old)</div>
-    <div>Stored forecasts are too old to reliably guide planning. Awaiting scheduled sync recovery.</div>
+  <aside class="banner banner-expired board-signal" role="alert">
+    <span class="signal-mark" aria-hidden="true">!</span>
+    <div><strong>Forecast is expired (&gt;12h old)</strong><p>Stored forecasts are too old to reliably guide planning. Awaiting scheduled sync recovery.</p></div>
   </aside>
 {% else %}
-  <aside class="banner banner-fresh" role="status">
-    <span style="font-size: 0.875rem;">
-      Forecast retrieved {{ board_freshness.age_display }} ago · Open-Meteo
-    </span>
+  <aside class="banner banner-fresh board-signal" role="status">
+    <span class="signal-mark" aria-hidden="true">✓</span>
+    <div><strong>Forecast retrieved {{ board_freshness.age_display }} ago</strong><p>Open-Meteo · Recommendations reflect CrewCast job policies.</p></div>
   </aside>
 {% endif %}
 
@@ -67,7 +75,7 @@
   {% if unactionable_jobs %}
     <section class="job-group">
       <div class="job-group-title">
-        <h2>No current recommendation</h2>
+        <div><p class="eyebrow">Needs review</p><h2>No current recommendation</h2></div>
         <span class="badge status-expired">{{ unactionable_jobs|length }}</span>
       </div>
       <ul class="job-list">
@@ -82,7 +90,7 @@
   {% if unsuitable_jobs %}
     <section class="job-group">
       <div class="job-group-title">
-        <h2>Unsuitable</h2>
+        <div><p class="eyebrow">Do not proceed on forecast alone</p><h2>Unsuitable</h2></div>
         <span class="badge status-unsuitable">{{ unsuitable_jobs|length }}</span>
       </div>
       <ul class="job-list">
@@ -97,7 +105,7 @@
   {% if caution_jobs %}
     <section class="job-group">
       <div class="job-group-title">
-        <h2>Caution</h2>
+        <div><p class="eyebrow">Check conditions</p><h2>Caution</h2></div>
         <span class="badge status-caution">{{ caution_jobs|length }}</span>
       </div>
       <ul class="job-list">
@@ -112,7 +120,7 @@
   {% if suitable_jobs %}
     <section class="job-group">
       <div class="job-group-title">
-        <h2>Suitable</h2>
+        <div><p class="eyebrow">Within policy thresholds</p><h2>Suitable</h2></div>
         <span class="badge status-suitable">{{ suitable_jobs|length }}</span>
       </div>
       <ul class="job-list">

@@ -38,6 +38,10 @@ class Site(models.Model):
             return False
         if self.last_successful_sync_at is None:
             return True
+        # Older demo seeds populated this timestamp without a provider call.
+        # Do not let that unverified timestamp postpone the first real sync.
+        if not self.sync_attempts.filter(outcome='success', source_kind='worker').exists():
+            return True
         if now is None:
             now = timezone.now()
         elapsed = now - self.last_successful_sync_at
@@ -211,6 +215,11 @@ class BudgetWindow(models.Model):
     Enforces a strict cap of 300 attempts per Lagos calendar day.
     """
     lagos_date = models.DateField(unique=True, help_text="Date in Africa/Lagos calendar")
+    source_kind = models.CharField(
+        max_length=10,
+        choices=[('worker', 'Background worker'), ('unknown', 'Legacy / unverified')],
+        default='worker',
+    )
     reserved_calls = models.PositiveIntegerField(default=0)
     successful_calls = models.PositiveIntegerField(default=0)
     failed_calls = models.PositiveIntegerField(default=0)
@@ -223,12 +232,13 @@ class BudgetWindow(models.Model):
         return f"Budget for {self.lagos_date}: {self.reserved_calls}/300 reserved"
 
     @classmethod
-    def reserve_slot(cls, date_lagos, cap: int = 300, max_attempts: int = 5) -> tuple[bool, 'BudgetWindow']:
+    def reserve_slot(cls, date_lagos, cap: int = 300, max_attempts: int = 20) -> tuple[bool, 'BudgetWindow']:
         """
         Atomically reserve an outbound call slot using row-level locking.
         Returns (True, window) if slot is reserved, or (False, window) if budget is exhausted.
         # ponytail: SQLite uses database-level locking requiring short backoff retries in tests; production uses PostgreSQL row locks.
         """
+        import random
         import time
         from django.db.utils import OperationalError
 
@@ -246,7 +256,7 @@ class BudgetWindow(models.Model):
                     return True, window
             except OperationalError as exc:
                 if 'locked' in str(exc).lower() and attempt < max_attempts - 1:
-                    time.sleep(0.05 * (attempt + 1))
+                    time.sleep(min(0.03 * (attempt + 1), 0.25) + random.uniform(0, 0.02))
                     continue
                 raise
 
@@ -303,6 +313,11 @@ class ForecastSnapshot(models.Model):
     """
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='snapshots')
     content_hash = models.CharField(max_length=64, db_index=True)
+    source_kind = models.CharField(
+        max_length=10,
+        choices=[('provider', 'Provider retrieval'), ('unknown', 'Legacy / unverified')],
+        default='provider',
+    )
     returned_latitude = models.DecimalField(max_digits=9, decimal_places=6)
     returned_longitude = models.DecimalField(max_digits=9, decimal_places=6)
     returned_elevation = models.FloatField(default=0.0)
@@ -333,6 +348,11 @@ class SyncAttempt(models.Model):
     ]
 
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='sync_attempts')
+    source_kind = models.CharField(
+        max_length=10,
+        choices=[('worker', 'Background worker'), ('unknown', 'Legacy / unverified')],
+        default='worker',
+    )
     planned_at = models.DateTimeField(default=timezone.now)
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -458,4 +478,3 @@ class ProviderCircuitState(models.Model):
                 circuit.state = 'OPEN'
                 circuit.opened_at = now
             circuit.save(update_fields=['state', 'consecutive_transient_failures', 'opened_at'])
-

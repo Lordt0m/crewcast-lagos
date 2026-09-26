@@ -10,36 +10,44 @@
 <body>
 
   <header class="app-header">
-    <div style="display: flex; align-items: center; gap: var(--space-3);">
+    <div class="header-inner">
+    <div class="brand-lockup">
       <a href="{% url 'job_board' %}" class="brand-title">
-        CrewCast Lagos
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <span>CrewCast <span class="brand-location">Lagos</span></span>
       </a>
-      <span class="brand-badge">Planning Desk</span>
+      <span class="brand-badge">Planning desk</span>
     </div>
 
     <nav aria-label="Main Navigation">
       <ul class="nav-links">
-        <li><a href="{% url 'job_board' %}" class="nav-link">Job board</a></li>
-        <li><a href="{% url 'operations' %}" class="nav-link">Operations</a></li>
-        <li><a href="{% url 'demo_replay' %}" class="nav-link">Failure replay</a></li>
-        {% if user.is_authenticated %}
-          <li><a href="{% url 'job_create' %}" class="btn btn-primary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Add job</a></li>
+        <li><a href="{% url 'job_board' %}" class="nav-link {% if request.resolver_match.url_name == 'job_board' %}active{% endif %}" {% if request.resolver_match.url_name == 'job_board' %}aria-current="page"{% endif %}>Job board</a></li>
+        <li><a href="{% url 'operations' %}" class="nav-link {% if request.resolver_match.url_name == 'operations' %}active{% endif %}" {% if request.resolver_match.url_name == 'operations' %}aria-current="page"{% endif %}>Operations</a></li>
+        <li><a href="{% url 'demo_replay' %}" class="nav-link {% if request.resolver_match.url_name == 'demo_replay' %}active{% endif %}" {% if request.resolver_match.url_name == 'demo_replay' %}aria-current="page"{% endif %}>Failure replay</a></li>
+        {% if DEMO_MODE %}
+          {# Public demo has no manager actions or sign-in. #}
+        {% elif user.is_authenticated %}
+          {% if request.resolver_match.url_name != 'job_board' %}
+            <li><a href="{% url 'job_create' %}" class="btn btn-primary nav-action">Add job</a></li>
+          {% endif %}
           <li>
-            <form action="{% url 'logout' %}" method="post" style="display: inline;">
+            <form action="{% url 'logout' %}" method="post" class="nav-form">
               {% csrf_token %}
-              <button type="submit" class="btn btn-secondary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Sign out</button>
+              <button type="submit" class="btn btn-secondary nav-action">Sign out</button>
             </form>
           </li>
         {% else %}
-          <li><a href="{% url 'login' %}" class="btn btn-secondary" style="min-height: 38px; padding-inline: 12px; font-size: 0.875rem;">Manager sign-in</a></li>
+          <li><a href="{% url 'login' %}" class="btn btn-secondary nav-action">Manager sign-in</a></li>
         {% endif %}
       </ul>
     </nav>
+    </div>
   </header>
 
   {% if DEMO_MODE %}
-    <div style="background-color: #fefce8; border-bottom: 1px solid #fef08a; padding: 10px 24px; font-size: 0.875rem; color: #713f12; text-align: center;">
-      <strong>Demo Mode:</strong> All state-changing actions are disabled server-side. Scheduled background syncing continues normally within the daily request budget.
+    <div class="demo-strip" role="note">
+      <span class="demo-strip-dot" aria-hidden="true"></span>
+      <span><strong>Demo Mode:</strong> Read-only. Live forecasts appear after the first worker sync.</span>
     </div>
   {% endif %}
 

@@ -16,7 +16,8 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV DEBUG=False
 
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["gunicorn", "crewcast.wsgi:application", "--bind", "0.0.0.0:8000"]

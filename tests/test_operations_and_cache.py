@@ -39,10 +39,10 @@ def ops_test_data(db):
     circuit.save()
 
     # 4. Sync Attempt
-    SyncAttempt.objects.create(
+    attempt = SyncAttempt.objects.create(
         site=site,
-        started_at=now - timedelta(minutes=15),
-        completed_at=now - timedelta(minutes=14, seconds=58),
+        started_at=site.last_successful_sync_at - timedelta(seconds=2),
+        completed_at=site.last_successful_sync_at,
         attempt_number=1,
         outcome='success',
         http_status=200,
@@ -85,6 +85,8 @@ def ops_test_data(db):
         coverage_end=(snap_start + timedelta(hours=23)).astimezone(dt_timezone.utc),
         hours_count=24,
     )
+    attempt.snapshot = snapshot
+    attempt.save(update_fields=['snapshot'])
     evaluate_and_record_job(job, snapshot)
 
     return {
@@ -114,6 +116,18 @@ def test_operations_dashboard_renders_all_telemetry(client, ops_test_data):
     assert "300" in html # cap
     assert "Lekki Phase 1 Depot" in html
     assert "6.447400, 3.484200" in html
+
+
+@pytest.mark.django_db
+def test_unverified_legacy_budget_is_not_described_as_confirmed_usage(client, ops_test_data):
+    budget = ops_test_data['budget']
+    budget.source_kind = 'unknown'
+    budget.save(update_fields=['source_kind'])
+
+    response = client.get('/operations/')
+    html = response.content.decode('utf-8')
+    assert response.status_code == 200
+    assert "Counts protect the limit but are not confirmed provider usage." in html
 
 
 @pytest.mark.django_db

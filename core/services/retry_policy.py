@@ -17,13 +17,13 @@ def calculate_retry_delay(
     - attempt 1 -> base * 1 + jitter
     - attempt 2 -> base * 2 + jitter
     - attempt 3 -> base * 4 + jitter
-    Honors Retry-After header if provided.
-    Caps at max_delay_seconds.
+    Caps exponential backoff at max_delay_seconds, but never shortens a
+    provider-supplied Retry-After delay.
     """
     factor = 2 ** max(0, attempt_number - 1)
-    delay = (base_seconds * factor) + jitter_seconds
+    delay = min((base_seconds * factor) + jitter_seconds, max_delay_seconds)
 
     if retry_after is not None:
         delay = max(delay, float(retry_after))
 
-    return min(delay, max_delay_seconds)
+    return delay

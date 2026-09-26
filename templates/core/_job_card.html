@@ -1,5 +1,5 @@
 <li>
-  <a href="{% url 'job_detail' pk=item.job.pk %}" class="job-card">
+  <a href="{% url 'job_detail' pk=item.job.pk %}" class="job-card" data-status="{{ item.display.actionable_status|default:'pending' }}">
     <div class="job-card-header">
       <div>
         <h3 class="job-card-title">{{ item.job.title }}</h3>
@@ -21,23 +21,21 @@
       </div>
     </div>
 
-    <div class="job-card-time">
-      <time datetime="{{ item.start_iso }}">{{ item.time_window_display }}</time>
-    </div>
+    <div class="job-card-time"><span class="job-card-time-label">Work window</span><time datetime="{{ item.start_iso }}">{{ item.time_window_display }}</time></div>
 
     {% if item.primary_reason %}
       <div class="job-card-reason">
         <strong>{{ item.display.display_status }} ·</strong> {{ item.primary_reason }}
       </div>
     {% elif item.display.banner_message %}
-      <div class="job-card-reason" style="font-style: italic;">
+      <div class="job-card-reason">
         {{ item.display.banner_message }}
       </div>
     {% endif %}
 
     <div class="job-card-meta">
       <span>{{ item.retrieval_age_display }}</span>
-      <span style="font-weight: 500;">Details & reasons &rarr;</span>
+      <span class="job-card-link-label">View job details <span aria-hidden="true">&rarr;</span></span>
     </div>
   </a>
 </li>

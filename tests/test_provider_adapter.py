@@ -1,6 +1,8 @@
 import json
 import pytest
 from pathlib import Path
+from datetime import datetime, timedelta, timezone as dt_timezone
+from email.utils import format_datetime
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from core.services.provider import (
@@ -9,6 +11,7 @@ from core.services.provider import (
     TransientProviderError,
     PermanentProviderError,
     REQUESTED_HOURLY_VARIABLES,
+    parse_retry_after,
 )
 from core.services.normalizer import (
     normalize_forecast_payload,
@@ -125,3 +128,11 @@ def test_open_meteo_transient_error_handling(monkeypatch):
         provider.fetch(6.45, 3.45)
     assert exc.value.status_code == 429
     assert exc.value.retry_after == 30
+
+
+def test_retry_after_http_date_and_large_seconds_are_preserved():
+    now = datetime(2030, 1, 1, tzinfo=dt_timezone.utc)
+    retry_at = now + timedelta(minutes=20)
+    assert parse_retry_after(format_datetime(retry_at, usegmt=True), now=now) == 1200
+    assert parse_retry_after('3600', now=now) == 3600
+    assert parse_retry_after('not-a-date', now=now) is None

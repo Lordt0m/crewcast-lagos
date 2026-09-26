@@ -37,9 +37,20 @@ def get_effective_planning_display(recommendation_status: Optional[str], freshne
     - Fresh: shows current recommendation and source age.
     - Stale: presents last recommendation as historical context, prominently labels age,
              and strictly does NOT present a new 'suitable' status.
-    - Expired / None: shows 'no current recommendation' with explanation.
+    - Pending: no forecast has been retrieved yet.
+    - Expired / unavailable: shows 'no current recommendation' with an accurate explanation.
     """
-    if freshness_state == 'expired' or not recommendation_status or recommendation_status == 'unavailable':
+    if freshness_state == 'pending':
+        return {
+            'actionable_status': None,
+            'display_status': 'No current recommendation',
+            'badge_class': 'status-expired',
+            'banner_message': 'Waiting for the first forecast. This job has no planning status yet.',
+            'is_stale': False,
+            'is_expired': False,
+        }
+
+    if freshness_state == 'expired':
         return {
             'actionable_status': None,
             'display_status': 'No current recommendation',
@@ -47,6 +58,16 @@ def get_effective_planning_display(recommendation_status: Optional[str], freshne
             'banner_message': 'Forecast is too old to guide this job. Review scheduled retry.',
             'is_stale': False,
             'is_expired': True,
+        }
+
+    if not recommendation_status or recommendation_status == 'unavailable':
+        return {
+            'actionable_status': None,
+            'display_status': 'No current recommendation',
+            'badge_class': 'status-expired',
+            'banner_message': 'No forecast evaluation is available for this job window.',
+            'is_stale': freshness_state == 'stale',
+            'is_expired': False,
         }
 
     if freshness_state == 'stale':

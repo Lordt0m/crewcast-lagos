@@ -4,13 +4,15 @@ import pytest
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.test import Client
-from core.models import Site, Job, WeatherPolicyVersion, ForecastSnapshot, Recommendation, LAGOS_TZ
+from core.models import Site, Job, WeatherPolicyVersion, ForecastSnapshot, SyncAttempt, Recommendation, LAGOS_TZ
 from core.services.provider import OpenMeteoProvider
 from core.services.evaluation_service import evaluate_and_record_job
+from core.services.cache_service import invalidate_board_cache
 
 
 @pytest.fixture
-def manager_client(db):
+def manager_client(db, settings):
+    settings.DEMO_MODE = False
     user = User.objects.create_user(username="lead_dispatcher", password="testpassword123")
     client = Client()
     client.force_login(user)
@@ -19,6 +21,7 @@ def manager_client(db):
 
 @pytest.fixture
 def seeded_data(db):
+    invalidate_board_cache()
     site = Site.objects.create(
         name="Victoria Island Office Park",
         latitude=Decimal("6.428100"),
@@ -65,6 +68,14 @@ def seeded_data(db):
     # Mark site retrieved 1 hour ago (fresh)
     site.last_successful_sync_at = timezone.now() - timedelta(hours=1)
     site.save()
+    SyncAttempt.objects.create(
+        site=site,
+        planned_at=site.last_successful_sync_at,
+        started_at=site.last_successful_sync_at,
+        completed_at=site.last_successful_sync_at,
+        outcome='success',
+        snapshot=snapshot,
+    )
 
     # Evaluate job
     evaluate_and_record_job(job1, snapshot)
@@ -109,6 +120,87 @@ def test_job_board_grouped_by_priority(client, seeded_data):
     assert "Rooftop HVAC Servicing" in html
     assert "Caution" in html
     assert "Victoria Island Office Park" in html
+
+
+@pytest.mark.django_db
+def test_public_gets_do_not_create_recommendations(client, seeded_data):
+    Recommendation.objects.all().delete()
+    assert client.get(f"/?date={seeded_data['tomorrow_date_str']}").status_code == 200
+    assert client.get(f"/jobs/{seeded_data['job'].pk}/").status_code == 200
+    assert Recommendation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_unverified_legacy_forecast_is_not_presented_as_live(client, seeded_data):
+    snapshot = seeded_data['snapshot']
+    snapshot.source_kind = 'unknown'
+    snapshot.save(update_fields=['source_kind'])
+    invalidate_board_cache()
+
+    board = client.get(f"/?date={seeded_data['tomorrow_date_str']}")
+    detail = client.get(f"/jobs/{seeded_data['job'].pk}/")
+    operations = client.get('/operations/')
+
+    assert 'Waiting for first forecast' in board.content.decode('utf-8')
+    assert 'No current recommendation' in board.content.decode('utf-8')
+    assert 'Waiting for first sync' in detail.content.decode('utf-8')
+    assert 'Evaluated conditions during job window' not in detail.content.decode('utf-8')
+    assert 'Legacy quota records may also contain demo seed values' in operations.content.decode('utf-8')
+
+
+@pytest.mark.django_db
+def test_current_forecast_follows_latest_retrieval_when_content_returns_a_b_a(client, seeded_data):
+    site = seeded_data['site']
+    job = seeded_data['job']
+    snapshot_a = seeded_data['snapshot']
+    safe_hourly = {
+        key: {
+            'precipitation_probability': 0,
+            'precipitation': 0.0,
+            'wind_gusts_10m': 10.0,
+            'apparent_temperature': 25.0,
+        }
+        for key in snapshot_a.hourly_data
+    }
+    snapshot_b = ForecastSnapshot.objects.create(
+        site=site,
+        content_hash='different-safe-content',
+        returned_latitude=snapshot_a.returned_latitude,
+        returned_longitude=snapshot_a.returned_longitude,
+        hourly_data=safe_hourly,
+        coverage_start=snapshot_a.coverage_start,
+        coverage_end=snapshot_a.coverage_end,
+        hours_count=snapshot_a.hours_count,
+    )
+    rec_b, _ = evaluate_and_record_job(job, snapshot_b)
+    assert rec_b.status == 'suitable'
+
+    retrieved_b_at = timezone.now() - timedelta(minutes=20)
+    SyncAttempt.objects.create(
+        site=site, planned_at=retrieved_b_at, started_at=retrieved_b_at,
+        completed_at=retrieved_b_at, outcome='success', snapshot=snapshot_b,
+    )
+    invalidate_board_cache()
+    board_b = client.get(f"/?date={seeded_data['tomorrow_date_str']}")
+    detail_b = client.get(f'/jobs/{job.pk}/')
+    assert any(item['job']['pk'] == job.pk for item in board_b.context['suitable_jobs'])
+    assert detail_b.context['snapshot'].pk == snapshot_b.pk
+
+    retrieved_a_again_at = timezone.now()
+    SyncAttempt.objects.create(
+        site=site, planned_at=retrieved_a_again_at, started_at=retrieved_a_again_at,
+        completed_at=retrieved_a_again_at, outcome='success', snapshot=snapshot_a,
+    )
+    site.last_successful_sync_at = retrieved_a_again_at
+    site.save(update_fields=['last_successful_sync_at'])
+    invalidate_board_cache()
+
+    board_a_again = client.get(f"/?date={seeded_data['tomorrow_date_str']}")
+    detail_a_again = client.get(f'/jobs/{job.pk}/')
+    assert any(item['job']['pk'] == job.pk for item in board_a_again.context['caution_jobs'])
+    assert detail_a_again.context['snapshot'].pk == snapshot_a.pk
+    assert detail_a_again.context['current_rec'].snapshot_id == snapshot_a.pk
+    assert detail_a_again.context['hourly_evaluations'][0]['prob'] == 60
 
 
 @pytest.mark.django_db

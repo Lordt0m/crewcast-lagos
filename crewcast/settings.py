@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from urllib.parse import urlparse
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -9,9 +10,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env if present
 load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-crewcast-lagos-development-key-2026')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',') if host.strip()]
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-crewcast-lagos-development-key-2026')
+if not DEBUG and (
+    not os.getenv('SECRET_KEY')
+    or SECRET_KEY.startswith('django-insecure-')
+    or SECRET_KEY in {
+        'docker-compose-development-key-lagos',
+        'insecure-development-key-change-in-production-lagos-weather-planning',
+    }
+):
+    raise ImproperlyConfigured('Set a unique SECRET_KEY before running with DEBUG=False.')
+
+allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
+if not DEBUG and not allowed_hosts_env:
+    raise ImproperlyConfigured('Set ALLOWED_HOSTS before running with DEBUG=False.')
+ALLOWED_HOSTS = [host.strip() for host in (allowed_hosts_env or 'localhost,127.0.0.1,testserver').split(',') if host.strip()]
+if not DEBUG and (not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS):
+    raise ImproperlyConfigured('ALLOWED_HOSTS must list explicit hostnames when DEBUG=False.')
+
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -28,6 +47,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'core.middleware.DemoReadOnlyMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -58,6 +78,10 @@ WSGI_APPLICATION = 'crewcast.wsgi.application'
 # Database Configuration
 # Default to PostgreSQL when DATABASE_URL is set, or fallback to SQLite for quick offline development
 DATABASE_URL = os.getenv('DATABASE_URL')
+if not DEBUG and not DATABASE_URL:
+    raise ImproperlyConfigured('Set a PostgreSQL DATABASE_URL before running with DEBUG=False.')
+if DATABASE_URL and not DATABASE_URL.startswith(('postgresql://', 'postgres://')):
+    raise ImproperlyConfigured('DATABASE_URL must use a PostgreSQL URL.')
 
 if DATABASE_URL and DATABASE_URL.startswith(('postgresql://', 'postgres://')):
     parsed = urlparse(DATABASE_URL)
@@ -105,6 +129,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
+AUTHENTICATION_BACKENDS = ['core.auth.LegacySeedGuardBackend']
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
@@ -129,7 +154,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Application specific settings
 DAILY_PROVIDER_BUDGET = int(os.getenv('DAILY_PROVIDER_BUDGET', '300'))
-DEMO_MODE = os.getenv('DEMO_MODE', 'False').lower() in ('true', '1', 't')
+DEMO_MODE = os.getenv('DEMO_MODE', 'True').lower() in ('true', '1', 't')
 PROVIDER_CIRCUIT_COOLOFF_SECONDS = int(os.getenv('PROVIDER_CIRCUIT_COOLOFF_SECONDS', '900'))
 PROVIDER_MAX_RETRIES = int(os.getenv('PROVIDER_MAX_RETRIES', '2'))
 

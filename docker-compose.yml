@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: crewcast_user
       POSTGRES_PASSWORD: crewcast_pass
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     container_name: crewcast_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -39,7 +39,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - DATABASE_URL=postgresql://crewcast_user:crewcast_pass@db:5432/crewcast_db
       - REDIS_URL=redis://redis:6379/0
@@ -47,7 +47,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DEBUG=True
       - SECRET_KEY=docker-compose-development-key-lagos
-      - DEMO_MODE=False
+      - DEMO_MODE=True
     depends_on:
       db:
         condition: service_healthy
@@ -68,7 +68,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DEBUG=True
       - SECRET_KEY=docker-compose-development-key-lagos
-      - DEMO_MODE=False
+      - DEMO_MODE=True
     depends_on:
       db:
         condition: service_healthy
@@ -89,7 +89,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DEBUG=True
       - SECRET_KEY=docker-compose-development-key-lagos
-      - DEMO_MODE=False
+      - DEMO_MODE=True
     depends_on:
       db:
         condition: service_healthy

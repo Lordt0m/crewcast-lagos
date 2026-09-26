@@ -5,7 +5,7 @@ import pytest
 from django.utils import timezone
 from core.models import Site, SyncAttempt, ProviderCircuitState, BudgetWindow
 from core.services.provider import ForecastProvider, TransientProviderError, PermanentProviderError, FixtureProvider
-from core.services.sync_service import sync_site, get_current_lagos_date
+from core.services.sync_service import sync_site, check_and_sync_all_due_sites, get_current_lagos_date
 from core.services.freshness import get_freshness_state, get_effective_planning_display
 from core.services.retry_policy import calculate_retry_delay
 
@@ -88,6 +88,18 @@ def test_freshness_classification_and_suitable_suppression():
     assert disp_expired['display_status'] == 'No current recommendation'
 
 
+def test_missing_forecast_copy_distinguishes_pending_from_expired():
+    pending = get_effective_planning_display(None, 'pending')
+    assert pending['actionable_status'] is None
+    assert pending['is_expired'] is False
+    assert 'first forecast' in pending['banner_message']
+    assert 'too old' not in pending['banner_message']
+
+    unavailable = get_effective_planning_display(None, 'fresh')
+    assert unavailable['is_expired'] is False
+    assert 'No forecast evaluation' in unavailable['banner_message']
+
+
 @pytest.mark.django_db(transaction=True)
 def test_transient_retry_delay_and_budget_inclusion(test_site):
     """Ticket 07: transient failure includes budget reservation and sets next retry."""
@@ -107,6 +119,93 @@ def test_transient_retry_delay_and_budget_inclusion(test_site):
     window = BudgetWindow.objects.get(lagos_date=today_lagos)
     assert window.reserved_calls >= 1
     assert window.failed_calls >= 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_scheduler_waits_for_retry_after_and_increments_attempt(test_site):
+    provider = FailingProvider(error_type='transient', status_code=429, retry_after=900)
+    first = sync_site(test_site, provider=provider)
+    assert first.outcome == 'transient_failure'
+    assert first.attempt.attempt_number == 1
+    assert first.attempt.next_retry_at >= first.attempt.completed_at + timedelta(seconds=900)
+
+    before_deadline = first.attempt.next_retry_at - timedelta(seconds=1)
+    assert check_and_sync_all_due_sites(provider=provider, now=before_deadline) == []
+    assert sync_site(test_site, provider=provider, now=before_deadline).outcome == 'skipped'
+    assert provider.call_count == 1
+    assert SyncAttempt.objects.filter(site=test_site).count() == 1
+    assert BudgetWindow.objects.get(lagos_date=get_current_lagos_date()).reserved_calls == 1
+
+    results = check_and_sync_all_due_sites(provider=provider, now=first.attempt.next_retry_at)
+    assert len(results) == 1
+    assert results[0].outcome == 'transient_failure'
+    assert results[0].attempt.attempt_number == 2
+    assert results[0].attempt.planned_at == first.attempt.planned_at
+    assert provider.call_count == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_exhausted_retry_cycle_waits_before_restarting(test_site):
+    finished_at = timezone.now() - timedelta(hours=1)
+    SyncAttempt.objects.create(
+        site=test_site,
+        planned_at=finished_at - timedelta(minutes=5),
+        started_at=finished_at - timedelta(seconds=1),
+        completed_at=finished_at,
+        attempt_number=3,
+        outcome='transient_failure',
+    )
+    provider = FailingProvider(error_type='transient')
+
+    assert check_and_sync_all_due_sites(provider=provider, now=finished_at + timedelta(hours=2)) == []
+    assert provider.call_count == 0
+
+    results = check_and_sync_all_due_sites(provider=provider, now=finished_at + timedelta(hours=3))
+    assert len(results) == 1
+    assert results[0].attempt.attempt_number == 1
+    assert provider.call_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_budget_deferral_is_not_repeated_on_every_scheduler_tick(test_site, settings):
+    settings.DAILY_PROVIDER_BUDGET = 0
+    provider = FailingProvider()
+    now = timezone.now()
+
+    first = check_and_sync_all_due_sites(provider=provider, now=now)
+    assert len(first) == 1
+    assert first[0].attempt.failure_category == 'budget_exhausted'
+    assert check_and_sync_all_due_sites(provider=provider, now=now + timedelta(minutes=5)) == []
+    assert SyncAttempt.objects.filter(site=test_site).count() == 1
+    assert provider.call_count == 0
+
+    next_day = check_and_sync_all_due_sites(provider=provider, now=now + timedelta(days=1))
+    assert len(next_day) == 1
+    assert next_day[0].attempt.attempt_number == 1
+    assert next_day[0].attempt.failure_category == 'budget_exhausted'
+
+
+@pytest.mark.django_db(transaction=True)
+def test_circuit_deferral_waits_for_cooloff(test_site):
+    now = timezone.now()
+    circuit = ProviderCircuitState.get_instance()
+    circuit.state = 'OPEN'
+    circuit.opened_at = now
+    circuit.cooloff_seconds = 900
+    circuit.save(update_fields=['state', 'opened_at', 'cooloff_seconds'])
+    provider = FailingProvider()
+
+    first = check_and_sync_all_due_sites(provider=provider, now=now)
+    assert len(first) == 1
+    assert first[0].attempt.failure_category == 'circuit_open'
+    assert first[0].attempt.next_retry_at >= now + timedelta(seconds=900)
+    assert check_and_sync_all_due_sites(provider=provider, now=now + timedelta(minutes=5)) == []
+    assert SyncAttempt.objects.filter(site=test_site).count() == 1
+    assert provider.call_count == 0
+
+
+def test_retry_after_is_not_capped_by_exponential_backoff_limit():
+    assert calculate_retry_delay(1, retry_after=3600) == 3600
 
 
 @pytest.mark.django_db(transaction=True)

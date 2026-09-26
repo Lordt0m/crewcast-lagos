@@ -2,6 +2,7 @@ import logging
 from django.db import transaction
 from core.models import Job, ForecastSnapshot, Recommendation, Site
 from core.evaluator import evaluate_forecast, EvaluationResult
+from .forecast_selection import latest_verified_success
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ def evaluate_all_jobs_for_site(site: Site, snapshot: ForecastSnapshot) -> list[R
 
 def reevaluate_job_with_latest_snapshot(job: Job) -> Recommendation | None:
     """Finds the latest snapshot for the job's site and evaluates."""
-    latest_snapshot = ForecastSnapshot.objects.filter(site=job.site).order_by('-first_retrieved_at').first()
-    if latest_snapshot:
-        rec, _ = evaluate_and_record_job(job, latest_snapshot)
+    current_attempt = latest_verified_success(job.site)
+    if current_attempt:
+        rec, _ = evaluate_and_record_job(job, current_attempt.snapshot)
         return rec
     return None

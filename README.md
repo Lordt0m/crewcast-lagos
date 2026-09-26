@@ -1,11 +1,9 @@
 # CrewCast Lagos
 
-> Synthetic weather-aware job planning aid for outdoor service dispatchers in Lagos, Nigeria.
+> Weather-aware job planning aid for outdoor service dispatchers in Lagos, Nigeria. Example jobs are synthetic; displayed forecasts require a real provider retrieval.
 
-[![CI](https://github.com/ayotomiwa/crewcast-lagos/actions/workflows/ci.yml/badge.svg)](https://github.com/ayotomiwa/crewcast-lagos/actions/workflows/ci.yml)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![Django 5.2](https://img.shields.io/badge/django-5.2-green.svg)](https://www.djangoproject.com/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 CrewCast answers the central operational question for outdoor service operations: **which scheduled jobs need attention because the latest forecast has changed, and can dispatchers trust the age of that forecast?**
 
@@ -20,7 +18,7 @@ CrewCast answers the central operational question for outdoor service operations
    Open-Meteo free non-commercial API usage is guarded by an atomic row-locked daily budget tracker (`BudgetWindow`). Even with multiple parallel Celery workers, outbound requests are capped at 300 per `Africa/Lagos` calendar day. Once exhausted, background sync attempts are recorded as `deferred` without failing local views.
 
 3. **Immutable Content Hash Snapshots & Provenance**  
-   Forecast data is normalized and deduplicated by SHA-256 content hash in `ForecastSnapshot`. If identical weather data is returned across multiple polling cycles, only one snapshot is stored while each attempt is logged in `SyncAttempt` with timestamps, durations, and HTTP statuses.
+   Forecast data is normalized and deduplicated by SHA-256 content hash in `ForecastSnapshot`. If identical weather data is returned across multiple polling cycles, only one snapshot is stored while each attempt is logged in `SyncAttempt` with timestamps, durations, and HTTP statuses. The current forecast follows the latest verified successful attempt, including when content changes A→B→A.
 
 4. **Pure Recommendation Evaluator**  
    Recommendation evaluation (`core/evaluator.py`) is a pure function. It accepts UTC job windows, policy thresholds, and hourly forecast arrays; computes intersecting hourly intervals; aggregates maximum metrics; and returns structured crossed threshold reasons with no database or network side-effects.
@@ -37,7 +35,7 @@ CrewCast answers the central operational question for outdoor service operations
    Job board query payloads are cached in Redis (`X-CrewCast-Cache: HIT`/`MISS`), but displayed forecast age and freshness tiers are computed at request render time from stored UTC timestamps. Cache hits advance in age naturally. If Redis becomes unavailable, the system gracefully falls back to PostgreSQL without 500 errors.
 
 8. **Server-Side Demo Mode (`DEMO_MODE=True`)**  
-   When demo mode is active, all state-changing HTTP methods (`POST`, `PUT`, `PATCH`, `DELETE`) on job, site, and policy routes are blocked with HTTP 403 Forbidden, even for authenticated managers.
+   When demo mode is active, state-changing HTTP methods are blocked across the site with HTTP 403 Forbidden, including sign-in and admin routes. Background workers can still retrieve real forecasts.
 
 ---
 
@@ -73,10 +71,9 @@ Weather forecasts are provided by [Open-Meteo](https://open-meteo.com) under Cre
 - PostgreSQL 16+ (or local SQLite fallback)
 - Redis 7+ (or local memory cache fallback)
 
-### 1. Clone & Virtual Environment
+### 1. Virtual Environment
 ```bash
-git clone https://github.com/ayotomiwa/crewcast-lagos.git
-cd crewcast-lagos
+# From the CrewCast Lagos project directory:
 
 python -m venv .venv
 # Windows PowerShell:
@@ -99,11 +96,13 @@ python manage.py migrate
 ```
 
 ### 4. Seed Synthetic Lagos Data
-Populate 6 Lagos sites, default policy thresholds, jobs, and canned forecast snapshots:
+Populate 6 example Lagos sites, default policy thresholds, and jobs:
 ```bash
 python manage.py seed_demo_data
 ```
-*Creates manager account:* `dispatcher` / `crewcast2026`
+The command does not create an account, forecast, successful sync attempt, or usage count. Forecasts remain pending until the worker retrieves data from Open-Meteo. Older snapshots, attempts, and budget windows from previous versions are conservatively treated as unverified after migration. Legacy budget counters remain in place to enforce the daily cap.
+
+If an older seed already created the `dispatcher` account, its published demo password is rejected even when `DEMO_MODE=False`. Reset that password to a private one or disable the account before using manager features. This update does not silently delete existing accounts or data.
 
 ### 5. Run the Application
 Start the Django development server:
@@ -116,7 +115,7 @@ Open [http://localhost:8000](http://localhost:8000) in your browser:
 - **Failure Replay Sandbox:** [http://localhost:8000/demo/replay/](http://localhost:8000/demo/replay/)
 - **Health Check Endpoint:** [http://localhost:8000/health/](http://localhost:8000/health/)
 
-### 6. Background Workers (Optional for live sync)
+### 6. Background Workers (Required for live sync)
 In separate terminal windows:
 ```bash
 # Celery Worker
@@ -125,6 +124,8 @@ celery -A crewcast worker -l info
 # Celery Beat Scheduler
 celery -A crewcast beat -l info
 ```
+
+The development server alone does not fetch live forecasts. The provided Docker Compose file is local-development only: its services bind to loopback and use development credentials. Do not expose it publicly. The image's default web command uses Gunicorn and `DEBUG=False`, and startup now requires a unique `SECRET_KEY`, explicit `ALLOWED_HOSTS`, and PostgreSQL `DATABASE_URL`. Before a public deployment, also set `DEMO_MODE=True`, configure HTTPS at the edge, run `collectstatic`, and run the worker and scheduler alongside the web app. Review or disable any old `dispatcher` login before ever enabling manager writes.
 
 ---
 
@@ -145,6 +146,9 @@ The test suite covers:
 - Responsive job board and detail views (`tests/test_board_and_detail_views.py`)
 - Operations telemetry and advancing age cache (`tests/test_operations_and_cache.py`)
 - Read-only demo mode and failure replay (`tests/test_demo_and_replay.py`)
+- Production configuration fail-closed checks (`tests/test_deployment_config.py`)
+
+CI requires PostgreSQL and Redis; it fails instead of silently substituting SQLite or an in-memory cache. Local tests may use SQLite and an in-memory cache when those services are unavailable.
 
 ---
 
@@ -153,5 +157,5 @@ The test suite covers:
 The user interface adheres to the design engineering principles in `.agents/skills/` (`better-interface`, `better-typography`, `better-colors`, `better-ui`, `emil-design-eng`):
 - **Typography:** System font stack with proportional tabular numerals (`tabular-nums`) for dates, percentages, and metrics.
 - **Color Independence:** Status badges combine high-contrast semantic background tokens with SVG icons and explicit textual labels (e.g. `Suitable`, `Caution`, `Unsuitable`, `Historical`).
-- **Responsive Layout:** Tested down to 320px viewport width and 200% zoom without horizontal clipping or broken controls.
+- **Responsive Layout:** The job board reflows to one column and keeps the seven-day selector scrollable at narrow widths. A visual 320px and 200% zoom check is still needed before claiming full coverage.
 - **Keyboard Navigation:** Full focus state rings (`:focus-visible`) and semantic landmark structures (`<header>`, `<nav>`, `<main>`, `<footer>`, `<section>`).

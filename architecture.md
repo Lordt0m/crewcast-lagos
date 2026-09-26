@@ -34,7 +34,7 @@ The provider response is validated before commit: array lengths and units match,
 
 Cache the assembled current job-list response by job revision, policy version, and snapshot/retrieval marker, with a short TTL of at most 30 minutes. Recompute data age at render time, so a cache hit cannot make a four-hour-old retrieval look new. Invalidate on job or policy change and successful sync. If Redis is unavailable for cache reads, Django reads PostgreSQL and records a degraded cache signal. If Redis is unavailable as the Celery broker, Beat/worker processing pauses and Operations reports that no recent worker heartbeat exists; the pages still load stored data and the freshness clock advances.
 
-Retry only errors likely to recover. Honor server `Retry-After` on `429`, impose a maximum delay, and never bypass the budget or circuit with a public refresh button. Record failure category and next attempt in the database before another task is queued. A manual manager retry may be added only if it uses the same budget and idempotency path; it is not required for the MVP.
+Retry only errors likely to recover. Cap exponential backoff but never shorten a server `Retry-After` on `429`; never bypass the budget or circuit with a public refresh button. Record failure category and next attempt in the database before another task is queued. A manual manager retry may be added only if it uses the same budget and idempotency path; it is not required for the MVP.
 
 ## Verification and operations
 

@@ -165,10 +165,20 @@ CI requires PostgreSQL and Redis; it fails instead of silently substituting SQLi
 
 ---
 
+## Interface development
+
+The redesigned interface remains server-rendered Django. `static/css/field.css` owns the weather field-bulletin design: self-hosted Barlow typography, signal yellow, ink and cobalt. The font licence is included under `static/fonts/`. `DESIGN.md` records the implemented system.
+
+Optional presentation enhancement is authored in `frontend/crewcast.ts`; generated `static/js/crewcast.js` is committed so Python-only hosting still works. To change it, run `npm ci`, `npm run build`, then `npm test`. Run `python manage.py collectstatic --noinput` before Django tests, as required by the manifest static storage. CI checks the TypeScript build, cancellation tests and generated-file drift alongside the existing backend suite.
+
+The first public introduction has a one-shot entrance. Replay sequences highlight existing, fully visible explanations. Repeated activation settles them immediately; keyboard and reduced-motion activation show the complete explanation. No enhancement fetches weather, evaluates policies or changes permissions.
+
+Date links retain a native `#planning` destination. With enhancement, only the Django-rendered board fragment is requested; its strip position and horizontal offset stay fixed, browser Back works, and keyboard focus follows the selected date. Requests are cancelled and generation-checked so an obsolete response cannot replace a newer selection. Failed loads retain current jobs and offer retry or full-page navigation. Responses vary on `X-CrewCast-Board`; no browser data cache or prefetch can conceal advancing forecast age. WOFF2 Latin font subsets reduce the two font downloads to about 48 KB combined; original licensed sources remain available. Introductory motion skips devices reporting at most two cores, data-saving mode or 2G/3G connections.
+
 ## Design System & Accessibility
 
 The user interface adheres to the design engineering principles in `.agents/skills/` (`better-interface`, `better-typography`, `better-colors`, `better-ui`, `emil-design-eng`):
-- **Typography:** System font stack with proportional tabular numerals (`tabular-nums`) for dates, percentages, and metrics.
+- **Typography:** Self-hosted Barlow Condensed display and Barlow reading text, with tabular numerals for dates and measurements.
 - **Color Independence:** Status badges combine high-contrast semantic background tokens with SVG icons and explicit textual labels (e.g. `Suitable`, `Caution`, `Unsuitable`, `Historical`).
-- **Responsive Layout:** The job board reflows to one column and keeps the seven-day selector scrollable at narrow widths. A visual 320px and 200% zoom check is still needed before claiming full coverage.
+- **Responsive Layout:** The job board reflows to one column; the seven-day selector remains horizontally scrollable. Wide data tables use labelled, focusable horizontal scroll regions.
 - **Keyboard Navigation:** Full focus state rings (`:focus-visible`) and semantic landmark structures (`<header>`, `<nav>`, `<main>`, `<footer>`, `<section>`).

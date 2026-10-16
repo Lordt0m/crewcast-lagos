@@ -1,0 +1,121 @@
+<section id="planning" aria-labelledby="planning-title" data-planning-board>
+<div class="planning-heading">
+  <div><h2 id="planning-title">The planning board</h2><p>{{ total_jobs_count }} job{{ total_jobs_count|pluralize }} · {{ attention_count }} need{{ attention_count|pluralize:"s," }} review · All times WAT</p></div>
+  {% if user.is_authenticated and not DEMO_MODE %}<div class="hero-actions" style="margin-top:0"><a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a><a href="{% url 'site_create' %}" class="text-link">Add site</a><a href="{% url 'policy_edit' %}" class="text-link">Weather policy</a></div>{% endif %}
+</div>
+
+<!-- 7-Day Planning Horizon Day Picker -->
+<div class="board-section-heading">
+  <div>
+    <h2>{{ selected_date_display }}</h2>
+  </div>
+  <span class="section-timezone">Seven-day outlook · Africa/Lagos</span>
+</div>
+<nav class="day-picker" aria-label="Planning Horizon Days">
+  {% for day in horizon_days %}
+    <a href="?date={{ day.date_str }}#planning" data-board-date class="day-tab {% if day.date_str == selected_date_str %}active{% endif %}" {% if day.date_str == selected_date_str %}aria-current="date"{% endif %}>
+      <span class="day-tab-weekday">{{ day.weekday }}</span>
+      <span class="day-tab-date">{{ day.day_num }} {{ day.month }}</span>
+      <span class="day-tab-count">{{ day.job_count }} job{{ day.job_count|pluralize }}</span>
+    </a>
+  {% endfor %}
+</nav>
+
+<p class="board-update" role="status" aria-live="polite" data-board-status>Showing {{ selected_date_display }}. Select a date to compare planned jobs.</p>
+
+<!-- Data Freshness Banner -->
+{% if board_freshness.state == 'pending' %}
+  <aside class="banner banner-fresh board-signal" role="status">
+    <div><strong>Waiting for first forecast</strong><p>Job recommendations will appear after the first worker sync.</p></div>
+  </aside>
+{% elif board_freshness.state == 'stale' %}
+  <aside class="banner banner-stale board-signal" role="alert">
+    <div><strong>Forecast is stale ({{ board_freshness.age_display }} old)</strong><p>Review local conditions before using earlier recommendations. Suitable statuses are suppressed until fresh data arrives.</p></div>
+  </aside>
+{% elif board_freshness.state == 'expired' %}
+  <aside class="banner banner-expired board-signal" role="alert">
+    <div><strong>Forecast is expired (&gt;12h old)</strong><p>Stored forecasts are too old to reliably guide planning. Awaiting scheduled sync recovery.</p></div>
+  </aside>
+{% else %}
+  <aside class="banner banner-fresh board-signal" role="status">
+    <div><strong>Latest site forecast retrieved {{ board_freshness.age_display }} ago</strong><p>Open-Meteo · This is the most recent site retrieval, not a guarantee that every site's forecast is fresh. Check job details.</p></div>
+  </aside>
+{% endif %}
+<p class="freshness-key"><strong>Reading the evidence:</strong> Fresh ≤4h · Stale &gt;4–12h: earlier context only, favourable signals suppressed · Expired &gt;12h: no current recommendation. <a href="{% url 'operations' %}">Check retrieval health</a></p>
+
+<!-- Job Groups -->
+{% if total_jobs_count == 0 %}
+  <div class="empty-state">
+    <h2 class="empty-state-title">No jobs planned for this day</h2>
+    <p class="empty-state-copy">
+      No outdoor jobs are scheduled for {{ selected_date_display }}. Choose another day in the seven-day outlook{% if not DEMO_MODE %}, or add a job to compare its work window with the forecast{% endif %}.
+    </p>
+    {% if user.is_authenticated and not DEMO_MODE %}
+      <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
+    {% endif %}
+    {% if DEMO_MODE %}<a href="{% url 'demo_replay' %}?scenario=caution" class="text-link">See an example job and its weather reasons</a><p class="quiet">Demo editing is disabled. Replay uses simulated weather, not retrieved forecasts.</p>{% endif %}
+  </div>
+{% else %}
+
+  {# Group 1: No Current Recommendation (Pending / Expired) #}
+  {% if unactionable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <div><h2>No current recommendation</h2><p>Missing, stale favourable, or expired evidence. Review before planning.</p></div>
+        <span class="badge status-expired">{{ unactionable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in unactionable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 2: Unsuitable #}
+  {% if unsuitable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <div><h2>Unsuitable</h2><p>A stop threshold was reached. Review the job window and conditions.</p></div>
+        <span class="badge status-unsuitable">{{ unsuitable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in unsuitable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 3: Caution #}
+  {% if caution_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <div><h2>Caution</h2><p>A caution threshold was reached. Check the reason and data age.</p></div>
+        <span class="badge status-caution">{{ caution_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in caution_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Group 4: Suitable #}
+  {% if suitable_jobs %}
+    <section class="job-group">
+      <div class="job-group-title">
+        <div><h2>Suitable</h2><p>Within this job's weather preferences; still verify conditions on site.</p></div>
+        <span class="badge status-suitable">{{ suitable_jobs|length }}</span>
+      </div>
+      <ul class="job-list">
+        {% for item in suitable_jobs %}
+          {% include "core/_job_card.html" with item=item %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+{% endif %}
+</section>

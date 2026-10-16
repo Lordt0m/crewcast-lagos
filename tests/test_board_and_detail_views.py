@@ -247,7 +247,7 @@ def test_empty_board_state_message(client):
     html = response.content.decode('utf-8')
 
     assert "No jobs planned for this day" in html
-    assert "Add a job to compare its work window with the forecast" in html
+    assert "Choose another day in the seven-day outlook" in html
 
 
 @pytest.mark.django_db

@@ -1,195 +1,63 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
 {% block title %}{{ job.title }} — Job Detail — CrewCast Lagos{% endblock %}
-
 {% block content %}
-<div style="margin-bottom: var(--space-6);">
-  <a href="{% url 'job_board' %}" class="btn btn-secondary" style="min-height: 36px; padding-inline: 12px; margin-bottom: var(--space-3);">&larr; Back to board</a>
-  
-  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4);">
-    <div>
-      <h1>{{ job.title }}</h1>
-      <p style="color: var(--color-text-secondary); font-size: 1.0625rem;">
-        Site: <strong>{{ job.site.name }}</strong>
-        <span style="color: var(--color-text-muted); font-size: 0.875rem;">
-          (Requested: {{ job.site.latitude }}°N, {{ job.site.longitude }}°E
-          {% if snapshot %}· Grid cell: {{ snapshot.returned_latitude }}°N, {{ snapshot.returned_longitude }}°E, elev {{ snapshot.returned_elevation }}m{% endif %})
-        </span>
-      </p>
-    </div>
-    {% if user.is_authenticated and not DEMO_MODE %}
-      <a href="{% url 'job_edit' pk=job.pk %}" class="btn btn-primary">Edit job</a>
-    {% endif %}
-  </div>
+<div class="page-heading job-detail-heading">
+  <a href="{% url 'job_board' %}#planning" class="text-link">← Back to board</a>
+  <h1 style="margin-top:24px">{{ job.title }}</h1>
+  <p>{{ job.site.name }}{% if DEMO_MODE %} · Synthetic example job{% endif %}</p>
+  {% if user.is_authenticated and not DEMO_MODE %}<a href="{% url 'job_edit' pk=job.pk %}" class="btn btn-primary">Edit job</a>{% endif %}
 </div>
-
 <div class="detail-grid">
-  <!-- Left Main Column: Status, Evaluated Conditions & History -->
-  <div style="display: flex; flex-direction: column; gap: var(--space-6);">
-
-    <!-- Current Recommendation Status Box -->
-    <div style="background-color: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-outer); padding: var(--space-6);">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4);">
-        <div>
-          <span style="font-size: 0.875rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Current planning signal</span>
-          <div style="margin-top: 4px;">
-            <span class="badge {{ effective_display.badge_class }}" style="font-size: 1rem; padding: 6px 14px;">
-              {{ effective_display.display_status }}
-            </span>
-          </div>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 0.875rem; color: var(--color-text-muted);">Data state: <strong>{{ freshness_state|title }}</strong></div>
-          <div style="font-size: 0.8125rem; color: var(--color-text-muted);">{{ retrieval_age_display }}</div>
-        </div>
-      </div>
-
-      <div style="font-size: 0.9375rem; color: var(--color-text-secondary); margin-bottom: var(--space-4);">
-        Scheduled work window: <strong>{{ time_window_display }}</strong>
-      </div>
-
-      {% if effective_display.banner_message %}
-        <div class="banner {% if freshness_state == 'stale' %}banner-stale{% else %}banner-expired{% endif %}" style="margin-bottom: var(--space-4);">
-          {{ effective_display.banner_message }}
-        </div>
-      {% endif %}
-
-      <!-- Reasons list -->
-      <div>
-        <h2 style="font-size: 1.0625rem; margin-bottom: var(--space-2);">Planning reasons and observations</h2>
-        {% if current_rec and current_rec.reasons %}
-          <ul style="list-style: disc; padding-inline-start: var(--space-6); color: var(--color-text-secondary); display: flex; flex-direction: column; gap: var(--space-2);">
-            {% for r in current_rec.reasons %}
-              <li><strong>{{ r.level|title }}:</strong> {{ r.message }}</li>
-            {% endfor %}
-          </ul>
-        {% elif current_rec and current_rec.status == 'suitable' %}
-          <p style="color: var(--status-suitable-text); background-color: var(--status-suitable-bg); padding: var(--space-3); border-radius: var(--radius-inner);">
-            All forecast metrics remain within caution thresholds for this planned window.
-          </p>
-        {% else %}
-          <p style="color: var(--color-text-muted); font-style: italic;">
-            No forecast evaluation is available yet for this job window.
-          </p>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Evaluated Hourly Weather Conditions Table -->
+  <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-content:start;min-width:0">
+    <section class="detail-panel signal-panel" aria-labelledby="signal-title">
+      <h2 id="signal-title">Current planning signal</h2>
+      <div class="detail-signal"><span class="badge {{ effective_display.badge_class }}">{{ effective_display.display_status }}</span> <span class="quiet">Data state: {{ freshness_state|title }}</span></div>
+      <p class="detail-window">{{ time_window_display }}</p>
+      <p class="data-stamp">{{ retrieval_age_display }}{% if verified_sync_at %} · <time datetime="{{ verified_sync_at|date:'c' }}">{{ verified_sync_at|date:'d M Y, H:i' }} WAT</time>{% endif %}</p>
+      <p class="quiet">Fresh ≤4h · Stale &gt;4–12h · Expired &gt;12h. Age is measured from the successful retrieval, not the original snapshot creation.</p>
+      {% if effective_display.banner_message %}<p class="banner {% if freshness_state == 'stale' %}banner-stale{% else %}banner-expired{% endif %}" style="margin-top:20px">{{ effective_display.banner_message }}</p>{% endif %}
+      <h2 style="margin-top:24px">Planning reasons and observations</h2>
+      {% if current_rec and current_rec.reasons %}
+        {% if freshness_state != 'fresh' %}<p class="quiet">Historical observations below are not a current recommendation.</p>{% endif %}
+        <ul class="reason-list">{% for r in current_rec.reasons %}<li><strong>{{ r.level|title }}:</strong> {{ r.message }}</li>{% endfor %}</ul>
+      {% elif current_rec and current_rec.status == 'suitable' %}
+        {% if freshness_state == 'fresh' %}<p>All forecast metrics remain within caution thresholds for this planned window.</p>{% else %}<p>Earlier evaluation was within caution thresholds. That favourable signal is suppressed because the forecast is {{ freshness_state }}.</p>{% endif %}
+      {% else %}<p class="quiet">No forecast evaluation is available yet for this job window. <a href="{% url 'operations' %}">Check retrieval health</a>.</p>{% endif %}
+    </section>
     {% if hourly_evaluations %}
-      <div style="background-color: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-outer); padding: var(--space-6);">
-        <h2 style="font-size: 1.0625rem;">Evaluated conditions during job window</h2>
-        <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-3);">
-          Conservative hourly intervals intersecting this job. Rain and wind gusts describe preceding hours; apparent temperature is instantaneous.
-        </p>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Hour (WAT)</th>
-                <th>Rain prob (%)</th>
-                <th>Precipitation (mm/h)</th>
-                <th>Wind gusts (km/h)</th>
-                <th>Apparent temp (°C)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for h in hourly_evaluations %}
-                <tr>
-                  <td><strong>{{ h.hour_label }}</strong></td>
-                  <td class="tabular-nums">{{ h.prob }}%</td>
-                  <td class="tabular-nums">{{ h.precip }} mm</td>
-                  <td class="tabular-nums">{{ h.gusts }} km/h</td>
-                  <td class="tabular-nums">{{ h.temp }} °C</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+    <section class="detail-panel" aria-labelledby="conditions-title">
+      <h2 id="conditions-title">Evaluated conditions during job window</h2>
+      <p class="quiet">Stored Open-Meteo forecast · {{ freshness_state|title }}. Conservative hourly intervals intersecting this job. Rain and wind gusts describe preceding hours; apparent temperature is instantaneous. Forecasts are estimates.</p>
+      <div class="table-region" tabindex="0" role="region" aria-label="Hourly forecast, scroll horizontally on small screens">
+        <table><caption>Hourly evidence · All times WAT{% if freshness_state != 'fresh' %} · Historical data{% endif %}</caption><thead><tr><th scope="col">Hour (WAT)</th><th scope="col">Rain probability (%)</th><th scope="col">Precipitation (mm/h)</th><th scope="col">Wind gusts (km/h)</th><th scope="col">Apparent temp (°C)</th></tr></thead><tbody>
+        {% for h in hourly_evaluations %}<tr><th scope="row">{{ h.hour_label }}</th><td>{{ h.prob }}%</td><td>{{ h.precip }} mm/h</td><td>{{ h.gusts }} km/h</td><td>{{ h.temp }} °C</td></tr>{% endfor %}
+        </tbody></table>
       </div>
+    </section>
     {% endif %}
-
-    <!-- Recommendation Comparison History -->
-    <div style="background-color: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-outer); padding: var(--space-6);">
-      <h2 style="font-size: 1.0625rem;">Recommendation history & comparison</h2>
-      <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-3);">
-        Each recommendation links to an immutable snapshot and policy version. Prior results remain visible when status or reasons change.
-      </p>
-
+    <section class="detail-panel" aria-labelledby="history-title">
+      <h2 id="history-title">Recommendation history &amp; comparison</h2>
+      <p class="quiet">Historical results, not current signals. Each result records the stored snapshot identifier and the policy version used at evaluation.</p>
       {% if prior_recs %}
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Job rev</th>
-                <th>Evaluated</th>
-                <th>Status</th>
-                <th>Snapshot</th>
-                <th>Observed reasons</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for rec in prior_recs %}
-                <tr {% if rec.pk == current_rec.pk %}style="background-color: var(--color-surface-subtle); font-weight: 500;"{% endif %}>
-                  <td class="tabular-nums">r{{ rec.job_revision }}{% if rec.pk == current_rec.pk %} (current){% endif %}</td>
-                  <td>{{ rec.evaluated_at|date:"M j, H:i WAT" }}</td>
-                  <td><span class="badge status-{{ rec.status }}">{{ rec.status|title }}</span></td>
-                  <td class="tabular-nums" style="font-family: monospace; font-size: 0.8125rem;">{{ rec.snapshot.content_hash|slice:":8" }}</td>
-                  <td style="font-size: 0.8125rem;">
-                    {% if rec.reasons %}
-                      {{ rec.reasons.0.message }}
-                    {% else %}
-                      None (suitable)
-                    {% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p style="color: var(--color-text-muted); font-size: 0.875rem;">Only one initial recommendation recorded for this job.</p>
-      {% endif %}
-    </div>
-
+      <div class="table-region" tabindex="0" role="region" aria-label="Recommendation history, scroll horizontally on small screens"><table>
+        <caption>Previous evaluations · Up to 10 records</caption>
+        <thead><tr><th scope="col">Job revision</th><th scope="col">Evaluated (WAT)</th><th scope="col">Historical status</th><th scope="col">Policy</th><th scope="col">Snapshot</th><th scope="col">Observed reasons</th></tr></thead><tbody>
+        {% for rec in prior_recs %}<tr><td>r{{ rec.job_revision }}{% if rec.pk == current_rec.pk %} (latest applicable){% endif %}</td><td>{{ rec.evaluated_at|date:'d M, H:i' }}</td><td>{{ rec.status|title }}</td><td>v{{ rec.policy_version.pk }}</td><td><code>{{ rec.snapshot.content_hash|slice:':8' }}</code></td><td>{% if rec.reasons %}{{ rec.reasons.0.message }}{% else %}Within caution thresholds at evaluation{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% else %}<p class="quiet" style="margin-top:16px">No verified evaluation history recorded for this job.</p>{% endif %}
+    </section>
   </div>
-
-  <!-- Right Sidebar: Policy Thresholds & Metadata -->
-  <aside style="display: flex; flex-direction: column; gap: var(--space-6);">
-    <div style="background-color: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-outer); padding: var(--space-6);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3);">
-        <h2 style="font-size: 1.0625rem; margin-bottom: 0;">Weather policy</h2>
-        <span style="font-size: 0.75rem; color: var(--color-text-muted);">v{{ job.policy_version.pk }}</span>
-      </div>
-      <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-4);">
-        Thresholds evaluated for this job. Planning preference, not occupational safety guidance.
-      </p>
-
-      <div style="display: flex; flex-direction: column; gap: var(--space-3); font-size: 0.875rem;">
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 4px;">
-          <span>Rain probability</span>
-          <span class="tabular-nums">{{ job.policy_version.rain_prob_caution }}% / {{ job.policy_version.rain_prob_stop }}%</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 4px;">
-          <span>Precipitation</span>
-          <span class="tabular-nums">{{ job.policy_version.precip_caution_mm }} / {{ job.policy_version.precip_stop_mm }} mm</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 4px;">
-          <span>Wind gusts</span>
-          <span class="tabular-nums">{{ job.policy_version.gust_caution_kmh }} / {{ job.policy_version.gust_stop_kmh }} km/h</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Apparent temp</span>
-          <span class="tabular-nums">{{ job.policy_version.apparent_temp_caution_c }} / {{ job.policy_version.apparent_temp_stop_c }} °C</span>
-        </div>
-      </div>
-    </div>
-
-    <div style="background-color: var(--color-surface-subtle); border-radius: var(--radius-outer); padding: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted);">
-      <p style="margin-bottom: var(--space-2);">
-        <strong>Planning signal only:</strong> A forecast is an estimation model and does not guarantee on-site weather safety. Always verify current weather conditions prior to dispatch.
-      </p>
-    </div>
+  <aside style="display:grid;gap:24px;align-content:start">
+    <section class="detail-panel">
+      <h2>Weather policy <span class="quiet">v{{ job.policy_version.pk }}</span></h2>
+      <p class="quiet">Caution / stop thresholds. Illustrative job preferences, not occupational safety guidance.</p>
+      <div class="policy-row"><span>Rain probability</span><span>{{ job.policy_version.rain_prob_caution }} / {{ job.policy_version.rain_prob_stop }}%</span></div>
+      <div class="policy-row"><span>Precipitation</span><span>{{ job.policy_version.precip_caution_mm }} / {{ job.policy_version.precip_stop_mm }} mm/h</span></div>
+      <div class="policy-row"><span>Wind gusts</span><span>{{ job.policy_version.gust_caution_kmh }} / {{ job.policy_version.gust_stop_kmh }} km/h</span></div>
+      <div class="policy-row"><span>Apparent temp</span><span>{{ job.policy_version.apparent_temp_caution_c }} / {{ job.policy_version.apparent_temp_stop_c }} °C</span></div>
+    </section>
+    <section class="detail-panel"><h2>Forecast provenance</h2><p class="quiet">Requested coordinates: {{ job.site.latitude }}°N, {{ job.site.longitude }}°E.</p>{% if snapshot %}<p class="quiet">Provider grid: {{ snapshot.returned_latitude }}°N, {{ snapshot.returned_longitude }}°E · Elevation {{ snapshot.returned_elevation|default_if_none:'unavailable' }} m.</p><p class="quiet">Coverage: {{ snapshot.coverage_start|date:'d M H:i' }}–{{ snapshot.coverage_end|date:'d M H:i' }} WAT. Complete job coverage is required for evaluation.</p>{% else %}<p class="quiet">No verified provider snapshot available.</p>{% endif %}</section>
+    <p class="detail-note"><strong>Planning signal only:</strong> A forecast cannot guarantee on-site conditions. Check current weather and site requirements before dispatch. <a href="{% url 'operations' %}">Inspect forecast operations</a>.</p>
   </aside>
 </div>
 {% endblock %}

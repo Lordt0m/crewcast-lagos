@@ -165,7 +165,8 @@ def test_demo_replay_scenarios_render_without_db_mutations(client, db):
 
         # Visible simulation label
         assert "Simulation Only" in html
-        assert "Auditable Resilience Evidence" in html
+        assert "Synthetic jobs and weather" in html
+        assert "scripted, in-memory scenario illustrations" in html
 
         # Scenario-specific content
         if sc == 'normal':
@@ -185,7 +186,7 @@ def test_demo_replay_scenarios_render_without_db_mutations(client, db):
             assert "Suitable Suppression" in html
         elif sc == 'expired':
             assert "No current recommendation" in html
-            assert "Zero Planning Signal" in html
+            assert "All actionable statuses are suppressed" in html
         elif sc == 'circuit_recovery':
             assert "CLOSED" in html
             assert "HALF_OPEN" in html

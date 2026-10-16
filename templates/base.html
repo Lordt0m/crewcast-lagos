@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}CrewCast Lagos — Weather-Aware Job Planning{% endblock %}</title>
   {% load static %}
-  <link rel="stylesheet" href="{% static 'css/crewcast.css' %}">
+  <link rel="stylesheet" href="{% static 'css/field.css' %}">
+  <script type="module" src="{% static 'js/crewcast.js' %}"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
 
   <header class="app-header">
     <div class="header-inner">
     <div class="brand-lockup">
       <a href="{% url 'job_board' %}" class="brand-title">
-        <span class="brand-mark" aria-hidden="true">C</span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20h18a5 5 0 0 0 0-10 8 8 0 0 0-15-1 6 6 0 0 0-3 11Z"/><path d="m11 24-2 4m10-4-2 4"/></svg></span>
         <span>CrewCast <span class="brand-location">Lagos</span></span>
       </a>
       <span class="brand-badge">Planning desk</span>
@@ -47,7 +49,7 @@
   {% if DEMO_MODE %}
     <div class="demo-strip" role="note">
       <span class="demo-strip-dot" aria-hidden="true"></span>
-      <span><strong>Demo Mode:</strong> Read-only demo with example jobs. Forecast age and freshness indicators reflect live data status.</span>
+      <span><strong>Demo Mode:</strong> Read-only · Synthetic example jobs. Forecasts are separately retrieved from Open-Meteo; check each site's data age.</span>
     </div>
   {% endif %}
 
@@ -61,7 +63,7 @@
     </div>
   {% endif %}
 
-  <main class="container">
+  <main class="container" id="main-content" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
 

@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.db import connection
 from django.core.cache import cache
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 
 from .models import (
     Site,
@@ -270,8 +271,11 @@ def job_board_view(request):
         'unsuitable_jobs': unsuitable_jobs,
         'caution_jobs': caution_jobs,
         'suitable_jobs': suitable_jobs,
+        'attention_count': len(unactionable_jobs) + len(unsuitable_jobs) + len(caution_jobs),
     }
-    response = render(request, 'core/job_board.html', context)
+    template = 'core/_planning.html' if request.headers.get('X-CrewCast-Board') == '1' else 'core/job_board.html'
+    response = render(request, template, context)
+    patch_vary_headers(response, ['X-CrewCast-Board'])
     response['X-CrewCast-Cache'] = 'HIT' if cache_hit else 'MISS'
     return response
 
@@ -351,6 +355,7 @@ def job_detail_view(request, pk):
         'effective_display': effective_display,
         'freshness_state': freshness_state,
         'retrieval_age_display': retrieval_age_text,
+        'verified_sync_at': verified_sync_at,
         'time_window_display': time_window_display,
         'hourly_evaluations': hourly_evaluations,
         'prior_recs': prior_recs,
@@ -765,6 +770,8 @@ def demo_replay_view(request):
         {'key': 'expired', 'name': '6. Expired Data', 'badge': 'Expired 14h'},
         {'key': 'circuit_recovery', 'name': '7. Circuit Breaker', 'badge': 'Circuit Trip'},
     ]
+    if scenario_key not in {scenario['key'] for scenario in scenarios_list}:
+        scenario_key = 'normal'
 
     now = timezone.now()
     now_lagos = now.astimezone(LAGOS_TZ)
@@ -814,7 +821,7 @@ def demo_replay_view(request):
 
     elif scenario_key == 'unsuitable':
         sim_title = "Severe Tropical Rainstorm (Stop Work Threshold)"
-        sim_desc = "Precipitation reaches 7.5 mm/h (stop: 5.0 mm/h) and rain probability peaks at 85% (stop: 70%). Immediate stop work recommendation."
+        sim_desc = "Precipitation reaches 7.5 mm/h (stop: 5.0 mm/h) and rain probability peaks at 85% (stop: 70%). This illustrative policy produces an Unsuitable planning signal, not occupational-safety clearance."
         rec_status = "unsuitable"
         sim_freshness_state = "fresh"
         sim_age_text = "Forecast retrieved 45m ago"

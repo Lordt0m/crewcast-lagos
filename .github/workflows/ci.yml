@@ -49,6 +49,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Verify progressive enhancement
+        run: |
+          npm ci
+          npm test
+          git diff --exit-code -- static/js
+
       - name: Run Django Checks & Migrations
         env:
           SECRET_KEY: ci-test-secret-key-crewcast

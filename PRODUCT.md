@@ -20,7 +20,7 @@ Django server rendering with progressive TypeScript enhancement. Essential links
 
 ## Evidence on Hand
 
-Existing code and tests, live public board, Operations and seven deterministic replay scenarios. Example jobs are synthetic; verified provider retrievals are separate. No customer, testimonial or outcome claims are available.
+Existing code and tests, live public board and Operations retrieval history. The introduction includes an example comparison. Example jobs are synthetic; verified provider retrievals are separate. No customer, testimonial or outcome claims are available.
 
 ## Brand Commitments
 

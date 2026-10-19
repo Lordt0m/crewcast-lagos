@@ -53,7 +53,7 @@
     {% if user.is_authenticated and not DEMO_MODE %}
       <a href="{% url 'job_create' %}" class="btn btn-primary">Add job</a>
     {% endif %}
-    {% if DEMO_MODE %}<a href="{% url 'demo_replay' %}?scenario=caution" class="text-link">See an example job and its weather reasons</a><p class="quiet">Demo editing is disabled. Replay uses simulated weather, not retrieved forecasts.</p>{% endif %}
+    {% if DEMO_MODE %}<a href="{% url 'operations' %}" class="text-link">Check site forecast health</a><p class="quiet">This demo is read-only. Choose another day to view scheduled jobs.</p>{% endif %}
   </div>
 {% else %}
 

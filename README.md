@@ -12,7 +12,7 @@ CrewCast answers the central operational question for outdoor service operations
 ## Key Invariants & Architectural Principles
 
 1. **Zero Provider Requests on Page Loads**  
-   Every web page view (`/`, `/jobs/<id>/`, `/operations/`, `/demo/replay/`) queries only stored PostgreSQL records and optional Redis cache. Live forecast synchronization runs outside web requests, via Celery locally or the scheduled GitHub Actions job for a hosted demo.
+   Every web page view (`/`, `/jobs/<id>/`, `/operations/`) queries only stored PostgreSQL records and optional Redis cache. Live forecast synchronization runs outside web requests, via Celery locally or the scheduled GitHub Actions job for a hosted demo. Retired `/demo/replay/` bookmarks permanently redirect to the planning board.
 
 2. **Atomic Lagos Calendar Daily Budget Cap (300 calls/day)**  
    Open-Meteo free non-commercial API usage is guarded by an atomic row-locked daily budget tracker (`BudgetWindow`). Even with overlapping sync processes, outbound requests are capped at 300 per `Africa/Lagos` calendar day. Once exhausted, background sync attempts are recorded as `deferred` without failing local views.
@@ -39,21 +39,6 @@ CrewCast answers the central operational question for outdoor service operations
 
 ---
 
-## Interactive Failure Replay Sandbox
-
-Visit `/demo/replay/` for an interactive, in-memory resilience sandbox that demonstrates edge cases without mutating shared database state:
-
-| Scenario | Invariant Demonstrated | Expected Signal |
-| :--- | :--- | :--- |
-| **1. Normal Success** | Clear weather work window | `Suitable` · All metrics below caution thresholds |
-| **2. Caution Warning** | Rain prob 55% or gusts 28 km/h | `Caution` · Specific metric and interval reasons |
-| **3. Severe Rainstorm** | Precipitation 7.5 mm/h or gusts 44 km/h | `Unsuitable` (Stop Work) |
-| **4. Timeout & Retry** | HTTP 504 Gateway Timeout | `Transient Error` · Exponential backoff & retry delay |
-| **5. Stale Data** | Forecast retrieved 7.5 hours ago | `Suitable Suppression` · Marked Historical Context |
-| **6. Expired Data** | Forecast retrieved 14 hours ago | `No current recommendation` |
-| **7. Circuit Breaker** | 3 consecutive upstream timeouts | `CLOSED` $\rightarrow$ `OPEN` $\rightarrow$ `HALF_OPEN` $\rightarrow$ `CLOSED` |
-
----
 
 ## Data Attribution & Non-Commercial Compliance
 
@@ -112,7 +97,6 @@ python manage.py runserver 8000
 Open [http://localhost:8000](http://localhost:8000) in your browser:
 - **Job Board:** [http://localhost:8000/](http://localhost:8000/)
 - **Operations Dashboard:** [http://localhost:8000/operations/](http://localhost:8000/operations/)
-- **Failure Replay Sandbox:** [http://localhost:8000/demo/replay/](http://localhost:8000/demo/replay/)
 - **Health Check Endpoint:** [http://localhost:8000/health/](http://localhost:8000/health/)
 
 ### 6. Background Workers (Required for live sync)
@@ -158,7 +142,7 @@ The test suite covers:
 - Retry policy, circuit breaker, and freshness suppression (`tests/test_retry_circuit_freshness.py`)
 - Responsive job board and detail views (`tests/test_board_and_detail_views.py`)
 - Operations telemetry and advancing age cache (`tests/test_operations_and_cache.py`)
-- Read-only demo mode and failure replay (`tests/test_demo_and_replay.py`)
+- Read-only demo mode and retired replay redirects (`tests/test_demo_and_replay.py`)
 - Production configuration fail-closed checks (`tests/test_deployment_config.py`)
 
 CI requires PostgreSQL and Redis; it fails instead of silently substituting SQLite or an in-memory cache. Local tests may use SQLite and an in-memory cache when those services are unavailable.

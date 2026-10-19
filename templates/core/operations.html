@@ -12,7 +12,7 @@
     See when forecasts last updated, what may be delaying the next update, and how many requests remain today.
   </p>
 </div>
-<aside class="ops-explanation"><p><strong>The retrieval story, not just the latest result.</strong> Read each site's last successful forecast alongside its latest attempt. A failed update preserves earlier data, but never resets its age. Page views do not contact the forecast provider.</p><a href="{% url 'demo_replay' %}?scenario=circuit_recovery" class="text-link">Walk through recovery</a></aside>
+<aside class="ops-explanation"><p><strong>The retrieval story, not just the latest result.</strong> Read each site's last successful forecast alongside its latest attempt. A failed update preserves earlier data, but never resets its age. Page views do not contact the forecast provider.</p></aside>
 
 {% if legacy_unverified_present %}
   <aside class="banner banner-stale" role="status">

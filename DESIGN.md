@@ -145,7 +145,7 @@ The palette is a cool, pale working surface framed by ink, with yellow for expla
 
 ### Neutral
 
-- **Bulletin Ink** (`text-primary`): main text, header/footer, planning band, work windows, Operations health strip/table headers, active scenario surface, comparison time band and threshold-crossing bars.
+- **Bulletin Ink** (`text-primary`): main text, header/footer, planning band, work windows, Operations health strip/table headers, comparison time band and threshold-crossing bars.
 - **Cool Paper** (`canvas`) and **Card White** (`surface-card`): page and record surfaces.
 - **Subtle Wash** (`surface-subtle`, `surface-hover`): secondary containers, table headers, disabled controls and pointer hover feedback.
 - **Reading Slate** (`text-secondary`, `text-muted`): explanation, supporting labels and timestamps.
@@ -173,21 +173,21 @@ The pairing is compact and assertive in headings, open and utilitarian in readin
 
 The main container is full width up to 1344px, including horizontal padding of 32px, with 40px above and 64px below. Header and footer interiors stop at 1280px. Spacing primitives are a 4px-based scale; component gaps and optical adjustments retain the exact implemented values rather than forcing every measurement onto that scale.
 
-The introductory comparison uses two equal columns and a 56px gap, reduced to 28px at 1000px. Job records use a 190px ink time column with yellow time text and a flexible content column with a 28px gap. The planning heading is an ink band with 22px by 24px padding. Detail uses a 2:1 split with a minimum 260px secondary column. Replay explanations use two equal columns; sequence rails use four columns. Operations health cells share one continuous ink strip; the budget uses the caution background and retrieval tables use ink header rows. The ink footer closes the frame.
+The introductory comparison uses two equal columns and a 56px gap, reduced to 28px at 1000px. Job records use a 190px ink time column with yellow time text and a flexible content column with a 28px gap. The planning heading is an ink band with 22px by 24px padding. Detail uses a 2:1 split with a minimum 260px secondary column. Operations health cells share one continuous ink strip; the budget uses the caution background and retrieval tables use ink header rows. The ink footer closes the frame.
 
-At 1000px and below, detail becomes one column, the seven-scenario navigation becomes four columns, sequence rails become two columns, and the secondary brand badge disappears. At 700px and below, the main container uses 20px horizontal padding, 28px above and 44px below. Introduction and replay grids stack, navigation wraps, scenario choices become two columns, and whole job records reflow into one column with the window above the content. The seven-day selector retains seven 104px columns in a horizontally scrollable strip. Wide forecast tables retain a 640px minimum width inside labeled, keyboard-focusable scroll regions.
+At 1000px and below, detail becomes one column, and the secondary brand badge disappears. At 700px and below, the main container uses 20px horizontal padding, 28px above and 44px below. The introduction stacks, navigation wraps, and whole job records reflow into one column with the window above the content. The seven-day selector retains seven 104px columns in a horizontally scrollable strip. Wide forecast tables retain a 640px minimum width inside labeled, keyboard-focusable scroll regions.
 
 ## Elevation & Depth
 
-Depth is primarily flat and structural. Job links form continuous ruled lists with a 2px ink top rule and 1px record separators; fine-pointer hover changes the record background to the cobalt wash. Detail and Operations panels have square edges, 2px ink top rules and no shadow. The main detail signal uses a 6px yellow top rule. Buttons, general cards, form cards, replay content and empty states retain the shared shallow shadow: `0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 2px 4px oklch(0 0 0 / 0.04)`.
+Depth is primarily flat and structural. Job links form continuous ruled lists with a 2px ink top rule and 1px record separators; fine-pointer hover changes the record background to the cobalt wash. Detail and Operations panels have square edges, 2px ink top rules and no shadow. The main detail signal uses a 6px yellow top rule. Buttons, general cards, form cards and empty states retain the shared shallow shadow: `0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 2px 4px oklch(0 0 0 / 0.04)`.
 
 **The Structural Depth Rule.** Keep operational records, detail and Operations panels flat and ruled; reserve the shared shallow shadow for the implemented controls and rounded containers.
 
 ## Shapes
 
-The shape vocabulary pairs restrained rounded containers with straight rules and rectangular work-window bands. General cards, forms and replay content use the outer radius; notes, banners and the planning heading use the medium radius; controls use the inner/button radius; status badges use the badge radius. Job records, detail and Operations panels have square edges. The comparison time band has a small 4px radius, and chart bars have 3px top corners. Roundness supports grouping rather than turning every label into a pill.
+The shape vocabulary pairs restrained rounded containers with straight rules and rectangular work-window bands. General cards and forms use the outer radius; notes, banners and the planning heading use the medium radius; controls use the inner/button radius; status badges use the badge radius. Job records, detail and Operations panels have square edges. The comparison time band has a small 4px radius, and chart bars have 3px top corners. Roundness supports grouping rather than turning every label into a pill.
 
-Focus is a 3px cobalt outline with a 3px offset. The ink header switches focus to yellow. Day choices use an inset offset of -4px; table regions use -3px. Forced-colors mode adds system-color borders to major controls and records and a Highlight outline to selected navigation and active sequence steps.
+Focus is a 3px cobalt outline with a 3px offset. The ink header switches focus to yellow. Day choices use an inset offset of -4px; table regions use -3px. Forced-colors mode adds system-color borders to major controls and records and a Highlight outline to selected navigation.
 
 ## Components
 
@@ -203,13 +203,13 @@ White native fields use a 1px Rule Grey border, inner radius, 46px minimum heigh
 
 ### Navigation
 
-The ink header contains a yellow weather mark, brand text and wrapping links with a 44px minimum height. Active links have a lighter ink background and yellow text. Day and scenario navigation use ruled grids, visible labels and native links with current-state attributes. Selected days use yellow and ink; selected scenarios use ink and yellow. Dates use condensed 1.8rem type; weekday labels are uppercase with .04em tracking. Retain native navigation and visible current state.
+The ink header contains a yellow weather mark, brand text and wrapping links with a 44px minimum height. Active links have a lighter ink background and yellow text. Day navigation use ruled grids, visible labels and native links with current-state attributes. Selected days use yellow and ink. Dates use condensed 1.8rem type; weekday labels are uppercase with .04em tracking. Retain native navigation and visible current state.
 
 Enhanced date selection replaces only the planning board with newly requested server HTML. It preserves the date strip's viewport position and horizontal scroll and returns keyboard focus to the selected date. Requests use no-store and never retrieve provider forecasts or maintain a client forecast cache. A newer selection aborts the older request, with a generation check guarding commits. Current jobs stay visible while loading; inline status and a full-page retry link explain failure. Back/forward navigation reloads the appropriate board without pushing another history entry. Native date links retain the `#planning` anchor and work without enhancement; modified clicks keep their browser behavior.
 
 ### Status badges and banners
 
-Badges use the frontmatter label typography and compact radius, with 1px borders. They are display labels rather than action chips. Banners use 18px by 20px padding, a 12px radius, a strong summary and supporting text. Freshness and simulation wording stays visible alongside the palette.
+Badges use the frontmatter label typography and compact radius, with 1px borders. They are display labels rather than action chips. Banners use 18px by 20px padding, a 12px radius, a strong summary and supporting text. Freshness and example labels stays visible alongside the palette.
 
 ### Job records / Containers
 

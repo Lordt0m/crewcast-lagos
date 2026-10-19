@@ -148,53 +148,14 @@ def test_operations_get_does_not_create_circuit_row(client):
 
 
 @pytest.mark.django_db
-def test_demo_replay_scenarios_render_without_db_mutations(client, db):
-    """
-    Ticket 10 Check: replay is visibly labelled simulation,
-    historical reasons match fixtures, and zero database mutations occur.
-    """
-    initial_job_count = Job.objects.count()
-    initial_snap_count = ForecastSnapshot.objects.count()
-
-    scenarios = ['normal', 'caution', 'unsuitable', 'timeout_retry', 'stale', 'expired', 'circuit_recovery']
-
-    for sc in scenarios:
-        res = client.get(f'/demo/replay/?scenario={sc}')
-        assert res.status_code == 200
-        html = res.content.decode('utf-8')
-
-        # Visible simulation label
-        assert "Simulation Only" in html
-        assert "Synthetic jobs and weather" in html
-        assert "scripted, in-memory scenario illustrations" in html
-
-        # Scenario-specific content
-        if sc == 'normal':
-            assert "Normal Success" in html
-            assert "Suitable" in html
-        elif sc == 'caution':
-            assert "Caution" in html
-            assert "Rain probability reached 55%" in html
-        elif sc == 'unsuitable':
-            assert "Stop Work" in html
-            assert "Precipitation reached 7.5 mm/h" in html
-        elif sc == 'timeout_retry':
-            assert "HTTP 504 Gateway Timeout" in html
-            assert "Exponential Backoff" in html
-        elif sc == 'stale':
-            assert "Historical context (Stale)" in html
-            assert "Suitable Suppression" in html
-        elif sc == 'expired':
-            assert "No current recommendation" in html
-            assert "All actionable statuses are suppressed" in html
-        elif sc == 'circuit_recovery':
-            assert "CLOSED" in html
-            assert "HALF_OPEN" in html
-            assert "OPEN" in html
-
-    # Strict invariant: replay never mutates shared DB
-    assert Job.objects.count() == initial_job_count
-    assert ForecastSnapshot.objects.count() == initial_snap_count
+@pytest.mark.parametrize('scenario', ['', 'normal', 'caution', 'unsuitable', 'timeout_retry', 'stale', 'expired', 'circuit_recovery', 'unknown'])
+def test_retired_replay_redirects_without_side_effects(client, scenario, monkeypatch):
+    monkeypatch.setattr(OpenMeteoProvider, 'fetch', lambda *a, **kw: pytest.fail('Redirect fetched weather'))
+    before = (Job.objects.count(), ForecastSnapshot.objects.count(), SyncAttempt.objects.count(), BudgetWindow.objects.count(), ProviderCircuitState.objects.count())
+    response = client.get('/demo/replay/', {'scenario': scenario})
+    assert response.status_code == 301
+    assert response['Location'] == '/#planning'
+    assert before == (Job.objects.count(), ForecastSnapshot.objects.count(), SyncAttempt.objects.count(), BudgetWindow.objects.count(), ProviderCircuitState.objects.count())
 
 
 @pytest.mark.django_db
@@ -207,4 +168,4 @@ def test_normal_page_views_send_no_provider_requests(client, monkeypatch):
 
     assert client.get('/').status_code == 200
     assert client.get('/operations/').status_code == 200
-    assert client.get('/demo/replay/').status_code == 200
+    assert client.get('/demo/replay/').status_code == 301

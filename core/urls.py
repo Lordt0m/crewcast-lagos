@@ -25,7 +25,7 @@ urlpatterns = [
     path('sites/new/', site_create_view, name='site_create'),
     path('policy/', policy_edit_view, name='policy_edit'),
 
-    # Operations & Demo Replay
+    # Operations and legacy replay bookmarks
     path('operations/', operations_view, name='operations'),
     path('demo/replay/', demo_replay_view, name='demo_replay'),
 

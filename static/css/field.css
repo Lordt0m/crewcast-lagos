@@ -916,113 +916,6 @@ caption {
   margin-top: 16px;
   margin-bottom: 0;
 }
-.replay-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: end;
-  margin-bottom: 28px;
-}
-.replay-intro h1 {
-  margin-top: 16px;
-}
-.scenario-nav {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--color-border);
-  border: 1px solid var(--color-border);
-  margin-bottom: 28px;
-}
-.scenario-link {
-  padding: 14px 12px;
-  min-height: 88px;
-  background: var(--color-canvas);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  font-size: 0.875rem;
-  display: grid;
-  align-content: center;
-  gap: 6px;
-}
-.scenario-link[aria-current="page"] {
-  background: var(--color-text-primary);
-  color: var(--sun);
-}
-.scenario-link small {
-  font-size: 0.75rem;
-}
-.replay-content {
-  padding: 28px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: var(--shadow-border);
-}
-.replay-content > header {
-  margin-bottom: 28px;
-}
-.replay-content > header h2 {
-  font-family: var(--font-display);
-  font-size: 2.4rem;
-}
-.replay-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
-  margin-bottom: 28px;
-}
-.simulated-job {
-  padding: 22px 0;
-  border-top: 2px solid var(--color-text-primary);
-}
-.simulated-job h3 {
-  font-size: 1.35rem;
-}
-.simulated-job > p {
-  margin-top: 12px;
-}
-.replay-rules {
-  padding-block: 12px;
-}
-.replay-rules li {
-  margin-bottom: 10px;
-}
-.replay-rules h3 {
-  margin-bottom: 16px;
-}
-.simulation-note {
-  color: var(--status-caution-text);
-  background: var(--status-caution-bg);
-  padding: 16px 20px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  font-size: 0.9rem;
-}
-.sequence-rail {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  padding: 0;
-  margin: 24px 0;
-}
-.sequence-rail li {
-  padding: 16px 0;
-  border-top: 2px solid var(--color-border);
-}
-.sequence-rail strong {
-  display: block;
-  margin: 8px 0;
-}
-.sequence-rail p {
-  font-size: 0.9rem;
-  color: var(--color-text-secondary);
-}
-.sequence-rail .stage-number {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  color: var(--color-accent);
-}
 .operations-intro {
   padding-bottom: 28px;
   margin-bottom: 28px;
@@ -1144,8 +1037,7 @@ caption {
     background: #2c4552;
     color: white;
   }
-  .day-tab:not(.active):hover,
-  .scenario-link:not([aria-current]):hover {
+  .day-tab:not(.active):hover {
     background: var(--color-surface-hover);
   }
   .job-card:hover {
@@ -1162,14 +1054,8 @@ caption {
   .brand-badge {
     display: none;
   }
-  .scenario-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
   .detail-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .sequence-rail {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 700px) {
@@ -1275,26 +1161,6 @@ caption {
   .job-card-header {
     gap: 10px;
   }
-  .replay-intro,
-  .replay-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
-  }
-  .scenario-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .scenario-link {
-    min-height: 72px;
-  }
-  .replay-content {
-    padding: 20px;
-  }
-  .replay-content > header h2 {
-    font-size: 2rem;
-  }
-  .simulated-job {
-    padding: 18px 0;
-  }
   .ops-explanation {
     flex-direction: column;
     gap: 12px;
@@ -1315,12 +1181,6 @@ caption {
   }
   .empty-state {
     padding: 24px;
-  }
-  .sequence-rail {
-    gap: 20px;
-  }
-  .sequence-rail li {
-    min-width: 0;
   }
   .sequence-controls {
     align-items: flex-start;
@@ -1355,12 +1215,10 @@ caption {
   .job-card,
   .window-study,
   .day-tab,
-  .scenario-link,
   .badge {
     border: 1px solid CanvasText;
   }
-  .day-tab.active,
-  .scenario-link[aria-current] {
+  .day-tab.active {
     outline: 2px solid Highlight;
     outline-offset: -4px;
   }

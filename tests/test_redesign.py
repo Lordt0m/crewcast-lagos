@@ -59,8 +59,7 @@ def test_public_workflows_are_complete_without_script_and_never_fetch(client, ex
         raise AssertionError('Page view attempted provider access')
     monkeypatch.setattr(OpenMeteoProvider, 'fetch', forbidden)
     before = (Job.objects.count(), ForecastSnapshot.objects.count(), SyncAttempt.objects.count(), Recommendation.objects.count())
-    routes = ['/', f'/jobs/{job.pk}/', '/operations/'] + [f'/demo/replay/?scenario={scenario}' for scenario in
-        ['normal', 'caution', 'unsuitable', 'timeout_retry', 'stale', 'expired', 'circuit_recovery']]
+    routes = ['/', f'/jobs/{job.pk}/', '/operations/']
     for route in routes:
         response = client.get(route)
         assert response.status_code == 200
@@ -68,10 +67,8 @@ def test_public_workflows_are_complete_without_script_and_never_fetch(client, ex
         assert '<main' in html and 'Skip to content' in html
         assert 'Planning signal only' in html
         assert 'occupational safety clearances' in html
-        if '/demo/' in route:
-            assert 'Synthetic jobs and weather' in html
-            assert 'aria-current="page"' in html
-            assert 'data-replay hidden' in html
+        assert '/demo/replay/' not in html
+        assert 'Failure replay' not in html
     assert before == (Job.objects.count(), ForecastSnapshot.objects.count(), SyncAttempt.objects.count(), Recommendation.objects.count())
 
 
@@ -81,17 +78,18 @@ def test_empty_demo_has_a_read_only_recovery_route(client, settings):
     invalidate_board_cache()
     html = client.get('/').content.decode()
     assert 'No jobs planned for this day' in html
-    assert 'See an example job and its weather reasons' in html
-    assert 'Demo editing is disabled' in html
-    assert 'Synthetic example · Not live weather' in html
+    assert 'Check site forecast health' in html
+    assert 'This demo is read-only' in html
+    assert 'Example comparison' in html
     assert 'href="/jobs/new/"' not in html
 
 
 @pytest.mark.django_db
-def test_unknown_replay_scenario_uses_complete_normal_example(client):
-    response = client.get('/demo/replay/?scenario=not-a-scenario')
-    assert response.context['scenario_key'] == 'normal'
-    assert response.context['hourly_evaluations']
+def test_retired_replay_follows_to_usable_planning_board(client):
+    response = client.get('/demo/replay/?scenario=not-a-scenario', follow=True)
+    assert response.status_code == 200
+    assert response.redirect_chain == [('/#planning', 301)]
+    assert 'data-planning-board' in response.content.decode()
 
 
 @pytest.mark.django_db

@@ -38,9 +38,9 @@ def demo_mode_guard(view_func):
     def _wrapped(request, *args, **kwargs):
         if getattr(settings, 'DEMO_MODE', False) and request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                return JsonResponse({'error': 'State-changing actions are disabled in Demo Mode.'}, status=403)
-            messages.warning(request, "State-changing actions are disabled in Demo Mode.")
-            return HttpResponseForbidden("State-changing actions are disabled in Demo Mode.")
+                return JsonResponse({'error': 'State-changing actions are disabled for this read-only view.'}, status=403)
+            messages.warning(request, "State-changing actions are disabled for this read-only view.")
+            return HttpResponseForbidden("State-changing actions are disabled for this read-only view.")
         return view_func(request, *args, **kwargs)
     return _wrapped
 

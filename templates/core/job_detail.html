@@ -4,7 +4,7 @@
 <div class="page-heading job-detail-heading">
   <a href="{% url 'job_board' %}#planning" class="text-link">← Back to board</a>
   <h1 style="margin-top:24px">{{ job.title }}</h1>
-  <p>{{ job.site.name }}{% if DEMO_MODE %} · Synthetic example job{% endif %}</p>
+  <p>{{ job.site.name }}{% if DEMO_MODE %} · Example job{% endif %}</p>
   {% if user.is_authenticated and not DEMO_MODE %}<a href="{% url 'job_edit' pk=job.pk %}" class="btn btn-primary">Edit job</a>{% endif %}
 </div>
 <div class="detail-grid">

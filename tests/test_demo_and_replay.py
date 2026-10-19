@@ -97,6 +97,8 @@ def test_demo_mode_blocks_all_mutations_server_side(manager_client, settings):
     }, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
     assert res_ajax.status_code == 403
     assert 'State-changing actions are disabled' in res_ajax.json()['error']
+    assert 'read-only view' in res_ajax.json()['error']
+    assert 'Demo Mode' not in res_ajax.json()['error']
 
     # 3. Site Create Blocked
     res_site = manager_client.post('/sites/new/', {
@@ -127,15 +129,17 @@ def test_demo_mode_blocks_all_mutations_server_side(manager_client, settings):
 
 
 @pytest.mark.django_db
-def test_demo_mode_banner_displayed_in_ui(client, settings):
-    """Verify demo mode warning banner is present in base HTML with durable wording and no outdated claims."""
+def test_public_branding_preserves_read_only_access_without_demo_banner(client, settings):
+    """Public wording does not expose the internal access-mode setting."""
     settings.DEMO_MODE = True
     response = client.get('/')
     assert response.status_code == 200
     html = response.content.decode('utf-8')
-    assert "Demo Mode:" in html
+    assert "Demo Mode" not in html
+    assert 'class="demo-strip"' not in html
     assert "Read-only" in html
-    assert "example jobs" in html
+    assert "Manager sign-in" not in html
+    assert 'href="/jobs/new/"' not in html
     assert "Live forecasts appear after the first worker sync" not in html
     assert "Open-Meteo" in html
 

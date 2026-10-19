@@ -10,7 +10,7 @@ class DemoReadOnlyMiddleware:
 
     def __call__(self, request):
         if settings.DEMO_MODE and request.method not in ('GET', 'HEAD', 'OPTIONS'):
-            message = 'State-changing actions are disabled in Demo Mode.'
+            message = 'State-changing actions are disabled for this read-only view.'
             if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
                 return JsonResponse({'error': message}, status=403)
             return HttpResponseForbidden(message)

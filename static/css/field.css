@@ -279,24 +279,6 @@ td {
 .nav-action {
   font-size: 0.875rem;
 }
-.demo-strip {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 24px;
-  background: #e6ece7;
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.demo-strip-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--color-text-primary);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 .container {
   max-width: 1344px;
   width: 100%;
@@ -1081,15 +1063,6 @@ caption {
   }
   .container {
     padding: 28px 20px 44px;
-  }
-  .demo-strip {
-    padding: 12px 20px;
-    align-items: flex-start;
-    justify-content: flex-start;
-    font-size: 0.8rem;
-  }
-  .demo-strip-dot {
-    margin-top: 6px;
   }
   .field-intro {
     grid-template-columns: minmax(0, 1fr);

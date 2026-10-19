@@ -145,7 +145,7 @@ def test_unverified_legacy_forecast_is_not_presented_as_live(client, seeded_data
     assert 'No current recommendation' in board.content.decode('utf-8')
     assert 'Waiting for first sync' in detail.content.decode('utf-8')
     assert 'Evaluated conditions during job window' not in detail.content.decode('utf-8')
-    assert 'Legacy quota records may also contain demo seed values' in operations.content.decode('utf-8')
+    assert 'Legacy quota records remain included in the request budget' in operations.content.decode('utf-8')
 
 
 @pytest.mark.django_db

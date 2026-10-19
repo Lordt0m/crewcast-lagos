@@ -69,6 +69,8 @@ def test_public_workflows_are_complete_without_script_and_never_fetch(client, ex
         assert 'occupational safety clearances' in html
         assert '/demo/replay/' not in html
         assert 'Failure replay' not in html
+        assert 'Demo Mode' not in html
+        assert 'This demo' not in html
     assert before == (Job.objects.count(), ForecastSnapshot.objects.count(), SyncAttempt.objects.count(), Recommendation.objects.count())
 
 
@@ -79,7 +81,7 @@ def test_empty_demo_has_a_read_only_recovery_route(client, settings):
     html = client.get('/').content.decode()
     assert 'No jobs planned for this day' in html
     assert 'Check site forecast health' in html
-    assert 'This demo is read-only' in html
+    assert 'Read-only access' in html
     assert 'Example comparison' in html
     assert 'href="/jobs/new/"' not in html
 
